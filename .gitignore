@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.tree-complete/*
+!.tree-complete/project.json
+coverage/
+*.tsbuildinfo
+*.log
+.env
+.DS_Store

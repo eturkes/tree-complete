@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "id": "tree-complete",
+    "name": "Tree Complete",
+    "description": "Explore a program as a living tree of explicit, forkable design decisions."
+  },
+  "decisions": [
+    {
+      "id": "data-boundary",
+      "title": "Data boundary",
+      "question": "Where does canonical project state live?",
+      "rationale": "The source of truth controls offline behavior, collaboration cost, and how safely a fork can be reproduced.",
+      "chosenAlternativeId": "local-json",
+      "alternatives": [
+        {
+          "id": "local-json",
+          "label": "Local JSON ledger",
+          "description": "Keep a compact, inspectable state document beside the project.",
+          "impact": "Fast startup and simple recovery with single-writer semantics.",
+          "signal": "recommended",
+          "brief": {
+            "objective": "Use an atomically replaced JSON document as the canonical store.",
+            "constraints": [
+              "Preserve a small typed storage boundary so another backend can be introduced later.",
+              "Keep runtime state inspectable and local to the Tree Complete data directory."
+            ],
+            "acceptance": [
+              "Concurrent in-process mutations serialize without lost updates.",
+              "A crash cannot leave the canonical state file partially written."
+            ]
+          }
+        },
+        {
+          "id": "sqlite",
+          "label": "Embedded SQLite",
+          "description": "Persist normalized versions, decisions, and run events in SQLite.",
+          "impact": "Stronger queries and transactions at the cost of a binary dependency.",
+          "signal": "balanced",
+          "brief": {
+            "objective": "Replace the JSON persistence adapter with an embedded SQLite store.",
+            "constraints": [
+              "Retain the existing public API and typed storage boundary.",
+              "Model versions, decisions, alternatives, runs, and logs transactionally."
+            ],
+            "acceptance": [
+              "A single transaction publishes each complete workspace mutation.",
+              "Restart recovery preserves every committed version and terminal run."
+            ]
+          }
+        },
+        {
+          "id": "event-log",
+          "label": "Append-only event log",
+          "description": "Derive current state by folding immutable domain events.",
+          "impact": "Excellent provenance and replay, with more projection machinery.",
+          "signal": "experimental",
+          "brief": {
+            "objective": "Represent every workspace mutation as an immutable event with deterministic projection.",
+            "constraints": [
+              "Keep snapshots optional and disposable.",
+              "Retain the existing public workspace and fork API."
+            ],
+            "acceptance": [
+              "Replaying the same ordered event stream produces an identical workspace.",
+              "Interrupted writes cannot corrupt earlier events."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "execution-isolation",
+      "title": "Execution isolation",
+      "question": "How should generated forks be isolated from the source checkout?",
+      "rationale": "Agents need real files and Git history, while unfinished experiments must stay out of the working branch.",
+      "chosenAlternativeId": "git-worktree",
+      "alternatives": [
+        {
+          "id": "git-worktree",
+          "label": "Git worktree",
+          "description": "Give every fork a dedicated branch and linked checkout.",
+          "impact": "Low disk overhead, native diffs, and immediately inspectable output.",
+          "signal": "recommended",
+          "brief": {
+            "objective": "Create each generated version in a dedicated Git worktree rooted at its exact parent commit.",
+            "constraints": [
+              "Use sanitized, collision-resistant branch names.",
+              "Keep the source checkout files unchanged and retain failed worktrees for diagnosis."
+            ],
+            "acceptance": [
+              "The generated commit has the recorded parent commit as its sole parent.",
+              "The recorded fork branch resolves to the generated commit."
+            ]
+          }
+        },
+        {
+          "id": "full-clone",
+          "label": "Ephemeral clone",
+          "description": "Clone the repository into a fully independent directory per run.",
+          "impact": "Clear isolation with higher setup and storage cost.",
+          "signal": "balanced",
+          "brief": {
+            "objective": "Replace linked worktrees with local clones that are pinned to each fork's parent commit.",
+            "constraints": [
+              "Create a dedicated sanitized branch in every clone.",
+              "Preserve the existing run lifecycle and lineage API."
+            ],
+            "acceptance": [
+              "A run cannot mutate the source repository's worktree or local branches.",
+              "The result exposes a verifiable commit and inspectable repository location."
+            ]
+          }
+        },
+        {
+          "id": "container",
+          "label": "Disposable container",
+          "description": "Execute each coding run inside a constrained container.",
+          "impact": "Stronger process isolation but substantially more orchestration.",
+          "signal": "experimental",
+          "brief": {
+            "objective": "Run generation and inspection inside a disposable rootless container.",
+            "constraints": [
+              "Mount only the fork checkout and narrowly required credentials.",
+              "Apply explicit process, memory, time, filesystem, and network limits."
+            ],
+            "acceptance": [
+              "The generated Git commit is the container's only durable program result.",
+              "A timed-out or hostile run leaves no surviving host process."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "agent-feedback",
+      "title": "Agent feedback",
+      "question": "How much execution detail should the interface expose?",
+      "rationale": "Useful progress builds trust, but raw model output is noisy and can disclose repository details.",
+      "chosenAlternativeId": "phased-status",
+      "alternatives": [
+        {
+          "id": "phased-status",
+          "label": "Curated phases",
+          "description": "Show stable phases, progress, and short orchestration messages.",
+          "impact": "Readable and safe, while retaining enough evidence to diagnose failures.",
+          "signal": "recommended",
+          "brief": {
+            "objective": "Present a curated run timeline with queued, preparing, generating, inspecting, and terminal phases.",
+            "constraints": [
+              "Store bounded human-readable orchestration messages instead of raw agent output.",
+              "Keep terminal success and failure states durable across refreshes."
+            ],
+            "acceptance": [
+              "Every active run exposes a monotonic phase and bounded progress value.",
+              "Client-visible logs disclose neither raw subprocess output nor secrets."
+            ]
+          }
+        },
+        {
+          "id": "terminal-stream",
+          "label": "Live terminal stream",
+          "description": "Stream sanitized subprocess output into a terminal-style panel.",
+          "impact": "Maximum immediacy with redaction, backpressure, and retention concerns.",
+          "signal": "balanced",
+          "brief": {
+            "objective": "Add a bounded server-sent event stream for sanitized agent output.",
+            "constraints": [
+              "Apply backpressure and redact secrets and absolute paths before publication.",
+              "Retain only a concise terminal summary after the live run."
+            ],
+            "acceptance": [
+              "A slow or disconnected client cannot grow server memory without bound.",
+              "Stream and persisted output pass deterministic redaction tests."
+            ]
+          }
+        },
+        {
+          "id": "result-only",
+          "label": "Result only",
+          "description": "Keep a run quiet until a commit or failure is available.",
+          "impact": "Minimal interface noise, but long runs appear inert.",
+          "signal": "experimental",
+          "brief": {
+            "objective": "Collapse active feedback into a single pending state and publish only the terminal result.",
+            "constraints": [
+              "Preserve detailed internal diagnostics in bounded server logs.",
+              "Keep the public terminal failure normalized and safe to display."
+            ],
+            "acceptance": [
+              "The client receives no intermediate agent output.",
+              "Completion publishes the result commit summary and failure publishes a concise reason."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "verification-policy",
+      "title": "Verification policy",
+      "question": "What evidence is required before a generated fork is complete?",
+      "rationale": "A branch existing is weaker evidence than a focused change that passes the project's own checks.",
+      "chosenAlternativeId": "targeted-checks",
+      "alternatives": [
+        {
+          "id": "targeted-checks",
+          "label": "Targeted checks",
+          "description": "Ask the agent to run checks relevant to the edited surface, then inspect the staged diff.",
+          "impact": "Good signal-to-runtime balance across unfamiliar repositories.",
+          "signal": "recommended",
+          "brief": {
+            "objective": "Derive inspection from the changed surface and the repository's existing project commands.",
+            "constraints": [
+              "Run focused tests and static checks relevant to the change.",
+              "Require a non-empty, whitespace-clean staged diff before the host commit."
+            ],
+            "acceptance": [
+              "The agent reports the focused checks it ran and resolves failures caused by its change.",
+              "The host rejects an empty or whitespace-invalid generated diff."
+            ]
+          }
+        },
+        {
+          "id": "full-suite",
+          "label": "Full project suite",
+          "description": "Run every declared project check for every generated fork.",
+          "impact": "Higher confidence when suites are reliable, with slower feedback.",
+          "signal": "balanced",
+          "brief": {
+            "objective": "Discover and run the repository's canonical complete validation workflow before commit.",
+            "constraints": [
+              "Use only project-declared validation surfaces.",
+              "Record failed check names as structured diagnostics."
+            ],
+            "acceptance": [
+              "Every declared project check exits successfully before the fork completes.",
+              "A failed or timed-out check prevents publication of a complete version."
+            ]
+          }
+        },
+        {
+          "id": "review-council",
+          "label": "Agent review council",
+          "description": "Have independent agents test and adversarially review the implementation.",
+          "impact": "Broad semantic scrutiny at materially greater compute and latency.",
+          "signal": "experimental",
+          "brief": {
+            "objective": "Invoke independent test and adversarial-review agents after implementation.",
+            "constraints": [
+              "Keep reviewer contexts independent before reconciliation.",
+              "Fix confirmed findings before the host creates the result commit."
+            ],
+            "acceptance": [
+              "Both reviewers produce structured evidence tied to the generated diff.",
+              "The final run records how every confirmed finding was resolved."
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
