@@ -26,8 +26,8 @@
               "Keep runtime state inspectable and local to the Tree Complete data directory."
             ],
             "acceptance": [
-              "Concurrent in-process mutations serialize without lost updates.",
-              "A crash cannot leave the canonical state file partially written."
+              "Concurrent in-process mutations serialize and preserve every update.",
+              "Crash recovery reads either the previous or replacement state as one complete document."
             ]
           }
         },
@@ -63,7 +63,7 @@
             ],
             "acceptance": [
               "Replaying the same ordered event stream produces an identical workspace.",
-              "Interrupted writes cannot corrupt earlier events."
+              "After an interrupted write, every earlier event remains intact and replayable."
             ]
           }
         }
@@ -107,7 +107,7 @@
               "Preserve the existing run lifecycle and lineage API."
             ],
             "acceptance": [
-              "A run cannot mutate the source repository's worktree or local branches.",
+              "After each run, the source repository's worktree and local branch refs exactly match their initial state.",
               "The result exposes a verifiable commit and inspectable repository location."
             ]
           }
@@ -126,7 +126,7 @@
             ],
             "acceptance": [
               "The generated Git commit is the container's only durable program result.",
-              "A timed-out or hostile run leaves no surviving host process."
+              "After timeout or termination, every process started for the run has exited."
             ]
           }
         }
@@ -170,7 +170,7 @@
               "Retain only a concise terminal summary after the live run."
             ],
             "acceptance": [
-              "A slow or disconnected client cannot grow server memory without bound.",
+              "Per-client buffering stays within a fixed bound for slow or disconnected clients.",
               "Stream and persisted output pass deterministic redaction tests."
             ]
           }
@@ -188,7 +188,7 @@
               "Keep the public terminal failure normalized and safe to display."
             ],
             "acceptance": [
-              "The client receives no intermediate agent output.",
+              "The client receives only the terminal result.",
               "Completion publishes the result commit summary and failure publishes a concise reason."
             ]
           }
@@ -234,7 +234,7 @@
             ],
             "acceptance": [
               "Every declared project check exits successfully before the fork completes.",
-              "A failed or timed-out check prevents publication of a complete version."
+              "Publication follows successful completion of every declared check."
             ]
           }
         },

@@ -23,8 +23,8 @@ export function useWorkspace(): WorkspaceState {
   const [refreshing, setRefreshing] = useState(false)
   const mounted = useRef(true)
   const inFlight = useRef<Promise<void> | null>(null)
-  // POST responses are newer authoritative snapshots. A GET that began before
-  // one must not overwrite it when the slower request eventually resolves.
+  // POST responses are newer authoritative snapshots. Preserve that state when
+  // an earlier, slower GET eventually resolves.
   const authorityRevision = useRef(0)
 
   useEffect(() => {
