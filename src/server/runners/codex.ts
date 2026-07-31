@@ -1,7 +1,13 @@
+import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdir, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 
+import {
+  MAX_RUN_RESULT_CHANGED_FILES,
+  MAX_RUN_RESULT_CHANGED_FILE_LENGTH,
+} from '../../shared/model.js'
 import { safeSlug } from '../git.js'
 import {
   PROJECT_MANIFEST_PATH,
@@ -142,41 +148,38 @@ export class CodexRunner implements AgentRunner {
       await safeGit(worktree, ['reset', '--soft', context.baseVersion.commit])
     }
 
-    const status = (
-      await safeGit(worktree, ['status', '--porcelain=v1', '--untracked-files=all'])
-    ).stdout
-    if (!status.trim()) {
-      throw new Error('Codex produced no file changes for the selected alternative.')
-    }
-
     await safeGit(worktree, ['add', '--all'])
     await safeGit(worktree, ['diff', '--cached', '--check'])
-    const changedNames = (
-      await safeGit(worktree, ['diff', '--cached', '--name-only', '-z', '--'])
-    ).stdout
-      .split('\0')
-      .filter(Boolean)
-    if (!changedNames.some((name) => name !== PROJECT_MANIFEST_PATH)) {
+    const changedPaths = await collectChangedPathEvidence(worktree, [
+      'diff',
+      '--cached',
+      '--name-only',
+      '-z',
+      '--',
+    ])
+    if (changedPaths.count === 0) {
+      throw new Error('Codex produced no file changes for the selected alternative.')
+    }
+    if (!changedPaths.hasImplementation) {
       throw new Error('Codex changed the design manifest but produced no implementation changes.')
     }
 
     const choiceLabel = context.toAlternative.label.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 72)
     const commitMessage = `feat(${safeSlug(context.decision.id)}): choose ${choiceLabel}`
-    await safeGit(worktree, ['commit', '--no-verify', '--message', commitMessage], 60_000)
+    await safeGit(worktree, ['commit', '--quiet', '--no-verify', '--message', commitMessage], 60_000)
     const commit = (
       await safeGit(worktree, ['rev-parse', '--verify', 'HEAD^{commit}'])
     ).stdout.trim()
-    const committedNames = (
-      await safeGit(worktree, [
-        'diff',
-        '--name-only',
-        '-z',
-        `${context.baseVersion.commit}..${commit}`,
-        '--',
-      ])
-    ).stdout
-      .split('\0')
-      .filter(Boolean)
+    const committedPaths = await collectChangedPathEvidence(worktree, [
+      'diff',
+      '--name-only',
+      '-z',
+      `${context.baseVersion.commit}..${commit}`,
+      '--',
+    ])
+    if (committedPaths.count === 0 || !committedPaths.hasImplementation) {
+      throw new Error('The host-created commit lost the verified implementation diff.')
+    }
     const committedIdentity = await worktreeIdentity(worktree)
     assertSameIdentity(expectedIdentity, committedIdentity)
     await assertWorktreeManifestMatches(worktree, expectedManifest)
@@ -202,7 +205,32 @@ export class CodexRunner implements AgentRunner {
 
     return {
       commit,
-      changedFiles: committedNames.length,
+      evidence: {
+        changeKind: 'measured',
+        changedFileCount: committedPaths.count,
+        changedFiles: committedPaths.files,
+        changedFilesTruncated: committedPaths.truncated,
+        checks: [
+          {
+            id: 'worktree-state',
+            label: 'Worktree state',
+            detail: 'Host matched the pinned worktree identity and selected project manifest.',
+            status: 'passed',
+          },
+          {
+            id: 'generated-diff',
+            label: 'Generated diff',
+            detail: 'Host required a non-empty implementation diff and passed Git whitespace inspection.',
+            status: 'passed',
+          },
+          {
+            id: 'commit-integrity',
+            label: 'Commit integrity',
+            detail: 'Host created a clean direct-child commit on the expected fork branch.',
+            status: 'passed',
+          },
+        ],
+      },
       summary: `${context.decision.title}: ${context.toAlternative.label}`,
     }
   }
@@ -339,4 +367,107 @@ Work method:
 
 function shortCommit(commit: string): string {
   return commit.slice(0, 10)
+}
+
+function safeRepositoryPathLabel(path: string, fingerprintSource: string | Buffer = path): string {
+  const normalized = path.normalize('NFC')
+  const printable = normalized.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '�')
+  const segments = printable.split('/')
+  let label =
+    printable.length > 0 &&
+    !printable.startsWith('/') &&
+    !segments.some((segment) => segment === '' || segment === '.' || segment === '..')
+      ? printable
+      : '[unprintable repository path]'
+  if (/^[a-z]:[\\/]/i.test(label) || label.startsWith('\\')) {
+    label = `[relative repository name] ${label}`
+  }
+
+  const sourceWasLossy = Buffer.isBuffer(fingerprintSource) &&
+    !Buffer.from(path, 'utf8').equals(fingerprintSource)
+  const changed = label !== path || sourceWasLossy
+  const characters = Array.from(label)
+  if (!changed && characters.length <= MAX_RUN_RESULT_CHANGED_FILE_LENGTH) return label
+
+  const fingerprint = createHash('sha256').update(fingerprintSource).digest('hex').slice(0, 8)
+  const suffix = ` [${fingerprint}]`
+  const available = MAX_RUN_RESULT_CHANGED_FILE_LENGTH - Array.from(suffix).length
+  const bounded = characters.length > available
+    ? `${characters.slice(0, available - 1).join('')}…`
+    : label
+  return `${bounded}${suffix}`
+}
+
+interface ChangedPathEvidence {
+  count: number
+  files: string[]
+  truncated: boolean
+  hasImplementation: boolean
+}
+
+async function collectChangedPathEvidence(
+  worktree: string,
+  args: readonly string[],
+): Promise<ChangedPathEvidence> {
+  return await new Promise((resolve, reject) => {
+    const child = spawn('git', [...HOST_GIT_CONFIG, '-C', worktree, ...args], {
+      env: safeGitEnvironment(),
+      detached: process.platform !== 'win32',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    let pending = Buffer.alloc(0)
+    let count = 0
+    let hasImplementation = false
+    const files: string[] = []
+    let settled = false
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill('SIGKILL')
+      reject(new Error('Git timed out while enumerating the generated file set.'))
+    }, 30_000)
+    timeout.unref()
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      pending = Buffer.concat([pending, chunk])
+      let separator = pending.indexOf(0)
+      while (separator >= 0) {
+        const rawPath = pending.subarray(0, separator)
+        const path = rawPath.toString('utf8')
+        pending = pending.subarray(separator + 1)
+        if (path) {
+          count += 1
+          hasImplementation ||= path !== PROJECT_MANIFEST_PATH
+          if (files.length < MAX_RUN_RESULT_CHANGED_FILES) {
+            files.push(safeRepositoryPathLabel(path, rawPath))
+          }
+        }
+        separator = pending.indexOf(0)
+      }
+    })
+    child.once('error', () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(new Error('Git could not enumerate the generated file set.'))
+    })
+    child.once('close', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      if (code !== 0) {
+        reject(new Error('Git could not enumerate the generated file set.'))
+      } else if (pending.length > 0) {
+        reject(new Error('Git returned a malformed generated file set.'))
+      } else {
+        resolve({
+          count,
+          files,
+          truncated: count > files.length,
+          hasImplementation,
+        })
+      }
+    })
+  })
 }

@@ -5,7 +5,12 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { AgentRun, ProgramVersion } from '../../shared/model.js'
+import {
+  MAX_RUN_RESULT_CHANGED_FILES,
+  MAX_RUN_RESULT_CHANGED_FILE_LENGTH,
+  type AgentRun,
+  type ProgramVersion,
+} from '../../shared/model.js'
 import {
   PROJECT_MANIFEST_PATH,
   manifestToDesignDecisions,
@@ -14,6 +19,7 @@ import {
 } from '../manifest.js'
 import { createSeedWorkspace } from '../seed.js'
 import { CodexRunner } from './codex.js'
+import { validateRunnerEvidence } from './evidence.js'
 import type { RunTransition, RunnerContext } from './types.js'
 
 const exec = promisify(execFile)
@@ -57,7 +63,16 @@ describe('CodexRunner', () => {
       fakeCodex,
       '#!/usr/bin/env node\n' +
         "const fs = require('node:fs');\n" +
-        "fs.writeFileSync('implementation.txt', 'implemented\\n');\n" +
+        "fs.mkdirSync('generated');\n" +
+        "for (let index = 0; index < 520; index += 1) fs.writeFileSync(`generated/${String(index).padStart(4, '0')}-${'x'.repeat(124)}.txt`, 'implemented\\n');\n" +
+        "fs.writeFileSync('00-control\\nname.txt', 'implemented\\n');\n" +
+        "fs.writeFileSync('01-separator\\u2028name.txt', 'implemented\\n');\n" +
+        "fs.mkdirSync(`01-${'long'.repeat(32)}`);\n" +
+        "fs.writeFileSync(`01-${'long'.repeat(32)}/${'path'.repeat(32)}.txt`, 'implemented\\n');\n" +
+        "fs.writeFileSync('02-\\u00e9.txt', 'implemented\\n');\n" +
+        "fs.writeFileSync('02-e\\u0301.txt', 'implemented\\n');\n" +
+        "fs.writeFileSync(Buffer.from([0x30, 0x33, 0x2d, 0x80, 0x2e, 0x74, 0x78, 0x74]), 'implemented\\n');\n" +
+        "fs.writeFileSync(Buffer.from([0x30, 0x33, 0x2d, 0x81, 0x2e, 0x74, 0x78, 0x74]), 'implemented\\n');\n" +
         "fs.writeFileSync('codex-args.json', JSON.stringify(process.argv.slice(2)));\n",
     )
     await chmod(fakeCodex, 0o700)
@@ -120,7 +135,36 @@ describe('CodexRunner', () => {
 
     expect(result.commit).toMatch(/^[0-9a-f]{40}$/)
     expect(result.commit).not.toBe(baseCommit)
-    expect(result.changedFiles).toBe(3)
+    expect(result.evidence).toMatchObject({
+      changeKind: 'measured',
+      changedFileCount: 529,
+      changedFilesTruncated: true,
+      checks: [
+        { id: 'worktree-state', status: 'passed' },
+        { id: 'generated-diff', status: 'passed' },
+        { id: 'commit-integrity', status: 'passed' },
+      ],
+    })
+    expect(result.evidence.changedFiles).toHaveLength(MAX_RUN_RESULT_CHANGED_FILES)
+    expect(result.evidence.changedFiles).toContainEqual(expect.stringMatching(/^00-control�name\.txt \[[0-9a-f]{8}\]$/))
+    expect(result.evidence.changedFiles).toContainEqual(expect.stringMatching(/^01-separator�name\.txt \[[0-9a-f]{8}\]$/))
+    expect(result.evidence.changedFiles).toContainEqual(expect.stringMatching(/… \[[0-9a-f]{8}\]$/))
+    expect(result.evidence.changedFiles.filter((path) => path.startsWith('02-é.txt'))).toEqual([
+      expect.stringMatching(/^02-é\.txt \[[0-9a-f]{8}\]$/),
+      '02-é.txt',
+    ])
+    const lossyLabels = result.evidence.changedFiles.filter((path) => path.startsWith('03-�.txt'))
+    expect(lossyLabels).toHaveLength(2)
+    expect(new Set(lossyLabels).size).toBe(2)
+    expect(
+      result.evidence.changedFiles.every(
+        (path) =>
+          Array.from(path).length <= MAX_RUN_RESULT_CHANGED_FILE_LENGTH &&
+          !/[\p{Cc}\p{Cf}]/u.test(path) &&
+          !path.startsWith('/') &&
+          !path.split('/').some((segment) => segment === '.' || segment === '..'),
+      ),
+    ).toBe(true)
     expect(transitions.map((transition) => transition.phase)).toEqual([
       'preparing',
       'generating',
@@ -135,6 +179,17 @@ describe('CodexRunner', () => {
     expect((await readWorktreeManifest(worktree)).decisions[0].chosenAlternativeId).toBe('sqlite')
     const parent = await exec('git', ['-C', worktree, 'rev-parse', 'HEAD^'])
     expect(parent.stdout.trim()).toBe(baseCommit)
+    const committedPaths = await exec('git', [
+      '-C',
+      worktree,
+      'diff',
+      '--name-only',
+      '-z',
+      `${baseCommit}..${result.commit}`,
+      '--',
+    ])
+    expect(committedPaths.stdout.split('\0').filter(Boolean)).toHaveLength(result.evidence.changedFileCount)
+    expect(validateRunnerEvidence(result.evidence, 'codex')).toEqual(result.evidence)
   })
 })
 

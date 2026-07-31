@@ -58,6 +58,28 @@ export interface RunLogEntry {
   tone: 'muted' | 'active' | 'success' | 'error'
 }
 
+export type RunChangeKind = 'measured' | 'simulated'
+
+export type RunCheckStatus = 'passed' | 'simulated'
+
+export interface RunCheckResult {
+  id: string
+  label: string
+  detail: string
+  status: RunCheckStatus
+}
+
+export interface AgentRunResult {
+  changeKind: RunChangeKind
+  changedFileCount: number
+  changedFiles: string[]
+  changedFilesTruncated: boolean
+  checks: RunCheckResult[]
+}
+
+export const MAX_RUN_RESULT_CHANGED_FILES = 40
+export const MAX_RUN_RESULT_CHANGED_FILE_LENGTH = 240
+
 export interface AgentRun {
   id: string
   versionId: string
@@ -68,6 +90,7 @@ export interface AgentRun {
   completedAt?: string
   worktreePath?: string
   error?: string
+  result?: AgentRunResult
   logs: RunLogEntry[]
 }
 

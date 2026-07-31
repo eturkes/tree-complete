@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -87,5 +87,53 @@ describe('WorkspaceStore', () => {
       completedAt: expect.any(String),
     })
     expect(workspace.versions.find((candidate) => candidate.id === 'child')?.status).toBe('failed')
+  })
+
+  it('normalizes legacy evidence and rejects malformed persisted evidence', async () => {
+    const dataDir = await directory()
+    const workspace = createSeedWorkspace({ runner })
+    workspace.runs.push({
+      id: 'legacy',
+      versionId: 'root',
+      mode: 'preview',
+      phase: 'complete',
+      progress: 100,
+      startedAt: '2026-01-01T00:00:00.000Z',
+      completedAt: '2026-01-01T00:00:01.000Z',
+      result: {
+        changeKind: 'simulated',
+        changedFileCount: 4,
+        changedFiles: [],
+        changedFilesTruncated: false,
+        checks: [{
+          id: 'preview-simulation',
+          label: 'Preview simulation',
+          detail: 'Legacy fixture.',
+          status: 'simulated',
+        }],
+      },
+      logs: [],
+    })
+    const serialized = JSON.parse(JSON.stringify(workspace)) as Record<string, unknown>
+    const runs = serialized.runs as Array<{ result: { changeKind: string; changedFileCount: number } }>
+    runs[0].result.changeKind = 'estimated'
+    await writeFile(join(dataDir, 'workspace.legacy.json'), JSON.stringify(serialized))
+
+    const store = await WorkspaceStore.open({
+      dataDir,
+      stateKey: 'legacy',
+      seed: () => createSeedWorkspace({ runner }),
+      runner,
+    })
+    expect((await store.snapshot()).runs[0].result?.changeKind).toBe('simulated')
+
+    runs[0].result.changedFileCount = -1
+    await writeFile(join(dataDir, 'workspace.invalid.json'), JSON.stringify(serialized))
+    await expect(WorkspaceStore.open({
+      dataDir,
+      stateKey: 'invalid',
+      seed: () => createSeedWorkspace({ runner }),
+      runner,
+    })).rejects.toThrow(/invalid run result evidence/)
   })
 })

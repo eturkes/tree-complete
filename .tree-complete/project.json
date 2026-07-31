@@ -215,7 +215,8 @@
               "Require a non-empty, whitespace-clean staged diff before the host commit."
             ],
             "acceptance": [
-              "The agent reports the focused checks it ran and resolves failures caused by its change.",
+              "Codex is explicitly instructed to run focused checks and resolve failures caused by its change.",
+              "Public result evidence distinguishes host-enforced Git integrity from unverified agent activity.",
               "The host rejects an empty or whitespace-invalid generated diff."
             ]
           }

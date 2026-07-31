@@ -28,9 +28,24 @@ export class PreviewRunner implements AgentRunner {
     })
     await delay(this.phaseDelayMs)
 
+    const simulatedChangedFileCount = 3 + (context.decision.id.length % 5)
+
     return {
       commit: `preview-${context.run.id.replaceAll('-', '').slice(0, 10)}`,
-      changedFiles: 3 + (context.decision.id.length % 5),
+      evidence: {
+        changeKind: 'simulated',
+        changedFileCount: simulatedChangedFileCount,
+        changedFiles: [],
+        changedFilesTruncated: false,
+        checks: [
+          {
+            id: 'preview-simulation',
+            label: 'Preview simulation',
+            detail: 'Simulated generation and inspection; no repository files or checks were executed.',
+            status: 'simulated',
+          },
+        ],
+      },
       summary: `${context.decision.title}: ${context.toAlternative.label}`,
     }
   }

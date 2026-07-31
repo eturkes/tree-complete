@@ -1,5 +1,6 @@
 import type {
   AgentRun,
+  AgentRunResult,
   DecisionAlternative,
   DesignDecision,
   ProgramVersion,
@@ -28,7 +29,7 @@ export interface RunnerContext {
 
 export interface RunnerResult {
   commit: string
-  changedFiles: number
+  evidence: AgentRunResult
   summary: string
 }
 

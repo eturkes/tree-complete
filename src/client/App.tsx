@@ -2,6 +2,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  MiniMap,
   Panel,
   ReactFlow,
   ReactFlowProvider,
@@ -12,14 +13,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentRun, CreateForkRequest, ProgramVersion, RunnerMode } from '../shared/model'
 import { isRunActive } from '../shared/model'
 import { createFork, readableError } from './api'
+import { ActivityCenter } from './components/ActivityCenter'
 import { Icon } from './components/Icon'
 import { Inspector } from './components/Inspector'
+import type { PanelFeedbackValue } from './components/PanelFeedback'
 import { RunDock } from './components/RunDock'
 import {
   VersionNode,
   type VersionFlowNode,
+  type VersionNodeData,
 } from './components/VersionNode'
-import { layoutVersionTree, lineageEdges } from './layout'
+import { layoutVersionTree, lineageEdges, lineagePathVersionIds } from './layout'
 import { useWorkspace } from './useWorkspace'
 
 const nodeTypes: NodeTypes = { version: VersionNode }
@@ -30,10 +34,15 @@ interface Selection {
   decisionId: string
 }
 
-function relativeTime(value: string): string {
+interface Notice {
+  title: string
+  detail: string
+}
+
+function relativeTime(value: string, now: number): string {
   const timestamp = new Date(value).getTime()
   if (Number.isNaN(timestamp)) return 'recently'
-  const seconds = Math.round((timestamp - Date.now()) / 1000)
+  const seconds = Math.round((timestamp - now) / 1000)
   const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
   if (Math.abs(seconds) < 60) return formatter.format(seconds, 'second')
   const minutes = Math.round(seconds / 60)
@@ -41,6 +50,15 @@ function relativeTime(value: string): string {
   const hours = Math.round(minutes / 60)
   if (Math.abs(hours) < 24) return formatter.format(hours, 'hour')
   return formatter.format(Math.round(hours / 24), 'day')
+}
+
+function absoluteTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Update time unavailable'
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'medium',
+  }).format(date)
 }
 
 function Header({
@@ -54,6 +72,7 @@ function Header({
   updatedAt,
   refreshing,
   onRefresh,
+  onOpenActivity,
 }: {
   projectName: string
   repository: string
@@ -65,7 +84,16 @@ function Header({
   updatedAt: string
   refreshing: boolean
   onRefresh: () => void
+  onOpenActivity: () => void
 }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const absoluteUpdate = absoluteTime(updatedAt)
+  const relativeUpdate = relativeTime(updatedAt, now)
+
   return (
     <header className="app-header">
       <a className="brand" href="#main" aria-label="Tree Complete home">
@@ -80,17 +108,30 @@ function Header({
         </span>
       </div>
       <div className="header-actions">
-        <div className={`runner-pill ${runnerAvailable ? '' : 'runner-pill--offline'}`} title={`${runnerLabel}: ${runnerAvailable ? 'available' : 'unavailable'}`}>
-          <span className="runner-pill__status" />
+        <div
+          aria-label={`${runnerLabel}: ${runnerAvailable ? 'available' : 'unavailable'}`}
+          className={`runner-pill ${runnerAvailable ? '' : 'runner-pill--offline'}`}
+          role="status"
+          title={`${runnerLabel}: ${runnerAvailable ? 'available' : 'unavailable'}`}
+        >
+          <span className="runner-pill__status" aria-hidden="true">
+            <Icon name={runnerAvailable ? 'check' : 'warning'} size={11} />
+          </span>
           <span><small>Runner</small><strong>{runnerMode}</strong></span>
         </div>
-        <div className={`activity-pill ${activeRuns ? 'activity-pill--active' : ''}`}>
+        <button
+          aria-label={`Open activity. ${activeRuns ? `${activeRuns} active` : 'No active runs'}. Workspace updated ${relativeUpdate}; ${absoluteUpdate}.`}
+          className={`activity-pill ${activeRuns ? 'activity-pill--active' : ''}`}
+          onClick={onOpenActivity}
+          title="Open complete run history"
+          type="button"
+        >
           <Icon name="activity" size={16} />
           <span>
             <strong>{activeRuns ? `${activeRuns} ${runnerMode === 'preview' ? 'preview' : `agent${activeRuns === 1 ? '' : 's'}`} active` : runnerMode === 'preview' ? 'Preview idle' : 'Agents idle'}</strong>
-            <small>Updated {relativeTime(updatedAt)}</small>
+            <small title={absoluteUpdate}>Updated {relativeUpdate}</small>
           </span>
-        </div>
+        </button>
         <button className="refresh-button" disabled={refreshing} onClick={onRefresh} type="button" aria-label="Refresh workspace">
           <Icon className={refreshing ? 'is-spinning' : ''} name="refresh" size={17} />
         </button>
@@ -139,11 +180,28 @@ interface LineageCanvasProps {
   versions: ProgramVersion[]
   selection: Selection | null
   onSelectDecision: (versionId: string, decisionId: string) => void
+  onOpenRun: (runId: string) => void
+  onFocusVersion: (versionId: string) => void
   runs: AgentRun[]
+  focusedVersionId: string | null
+  focusRevision: number
 }
 
-function LineageCanvas({ versions, selection, onSelectDecision, runs }: LineageCanvasProps) {
+function LineageCanvas({
+  versions,
+  selection,
+  onSelectDecision,
+  onOpenRun,
+  onFocusVersion,
+  runs,
+  focusedVersionId,
+  focusRevision,
+}: LineageCanvasProps) {
   const positions = useMemo(() => layoutVersionTree(versions), [versions])
+  const focusedPath = useMemo(
+    () => lineagePathVersionIds(versions, focusedVersionId),
+    [focusedVersionId, versions],
+  )
   const nodes = useMemo<VersionFlowNode[]>(
     () =>
       versions.map((version) => ({
@@ -157,21 +215,72 @@ function LineageCanvas({ versions, selection, onSelectDecision, runs }: LineageC
           )?.mode,
           selectedDecisionId: selection?.versionId === version.id ? selection.decisionId : null,
           onSelectDecision,
+          onOpenRun,
+          onFocusVersion,
+          highlighted: version.id === focusedVersionId,
+          inFocusedPath: focusedPath.has(version.id),
         },
         draggable: false,
         selectable: false,
       })),
-    [onSelectDecision, positions, runs, selection, versions],
+    [focusedPath, focusedVersionId, onFocusVersion, onOpenRun, onSelectDecision, positions, runs, selection, versions],
   )
-  const edges = useMemo(() => lineageEdges(versions), [versions])
-  const { fitView } = useReactFlow<VersionFlowNode>()
+  const edges = useMemo(() => lineageEdges(versions, focusedVersionId), [focusedVersionId, versions])
+  const { fitView, getNode } = useReactFlow<VersionFlowNode>()
+  const [compactViewport, setCompactViewport] = useState(
+    () => window.matchMedia('(max-width: 820px)').matches,
+  )
+  const initialFitMode = useRef<boolean | null>(null)
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      void fitView({ padding: 0.14, duration: 450, maxZoom: 0.92 })
-    })
+    const media = window.matchMedia('(max-width: 820px)')
+    const update = () => setCompactViewport(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+
+  useEffect(() => {
+    if (initialFitMode.current === compactViewport) return
+    const rootId = nodes.find((node) => node.data.version.parentId === null)?.id
+    const mobileRoot = compactViewport && nodes.length > 2
+    let frame = 0
+    let attempts = 0
+    const fitWhenReady = () => {
+      const ready = nodes.every((node) => getNode(node.id))
+      const root = rootId ? getNode(rootId) : undefined
+      if ((!ready || (mobileRoot && !root)) && attempts < 30) {
+        attempts += 1
+        frame = window.requestAnimationFrame(fitWhenReady)
+        return
+      }
+      if (!ready) return
+      initialFitMode.current = compactViewport
+      void fitView(mobileRoot
+        ? { nodes: root ? [root] : undefined, padding: 0.04, duration: 450, minZoom: 1, maxZoom: 1 }
+        : { padding: 0.14, duration: 450, maxZoom: 0.92 })
+    }
+    frame = window.requestAnimationFrame(fitWhenReady)
     return () => window.cancelAnimationFrame(frame)
-  }, [fitView, versions.length])
+  }, [compactViewport, fitView, getNode, nodes])
+
+  useEffect(() => {
+    if (!focusedVersionId || focusRevision < 1) return
+    let frame = 0
+    let attempts = 0
+    const focusWhenReady = () => {
+      const node = getNode(focusedVersionId)
+      if (!node && attempts < 30) {
+        attempts += 1
+        frame = window.requestAnimationFrame(focusWhenReady)
+        return
+      }
+      if (node) {
+        void fitView({ nodes: [node], padding: 0.32, duration: 420, minZoom: 0.76, maxZoom: 1 })
+      }
+    }
+    frame = window.requestAnimationFrame(focusWhenReady)
+    return () => window.cancelAnimationFrame(frame)
+  }, [fitView, focusRevision, focusedVersionId, getNode, nodes.length])
 
   const latestRun = useMemo(
     () =>
@@ -190,10 +299,8 @@ function LineageCanvas({ versions, selection, onSelectDecision, runs }: LineageC
       colorMode="light"
       defaultEdgeOptions={{ type: 'smoothstep' }}
       edges={edges}
-      fitView
-      fitViewOptions={{ padding: 0.14, maxZoom: 0.92 }}
       maxZoom={1.3}
-      minZoom={0.2}
+      minZoom={compactViewport ? 1 : 0.2}
       nodeTypes={nodeTypes}
       nodes={nodes}
       nodesConnectable={false}
@@ -206,13 +313,29 @@ function LineageCanvas({ versions, selection, onSelectDecision, runs }: LineageC
     >
       <Background color="#aeb7ad" gap={24} size={1.15} variant={BackgroundVariant.Dots} />
       <Controls position="bottom-right" showInteractive={false} />
+      {versions.length > 2 ? (
+        <MiniMap
+          ariaLabel="Version lineage overview"
+          className="lineage-minimap"
+          maskColor="rgba(232, 234, 223, 0.72)"
+          nodeColor={(node) => {
+            const status = (node.data as VersionNodeData).version.status
+            if (status === 'failed') return '#ff715e'
+            if (status === 'working' || status === 'queued') return '#3e63f4'
+            return '#29473e'
+          }}
+          pannable
+          position="top-right"
+          zoomable
+        />
+      ) : null}
       <Panel className="canvas-label" position="top-left">
         <span>Version lineage</span>
         <strong>{versions.length} version{versions.length === 1 ? '' : 's'}</strong>
       </Panel>
       {latestRun ? (
         <Panel className="run-panel" position="bottom-left">
-          <RunDock run={latestRun} version={runVersion} />
+          <RunDock onOpen={() => onOpenRun(latestRun.id)} run={latestRun} version={runVersion} />
         </Panel>
       ) : null}
     </ReactFlow>
@@ -234,11 +357,64 @@ function WorkspaceApp() {
   const [generating, setGenerating] = useState(false)
   const generatingRequest = useRef(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [activityOpen, setActivityOpen] = useState(false)
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [focusedVersionId, setFocusedVersionId] = useState<string | null>(null)
+  const [focusRevision, setFocusRevision] = useState(0)
+  const panelTrigger = useRef<HTMLElement | null>(null)
+  const panelRevision = useRef(0)
+  const focusedVersionRef = useRef<string | null>(null)
 
   const selectedVersion = workspace?.versions.find((item) => item.id === selection?.versionId) ?? null
   const selectedDecision =
     selectedVersion?.decisions.find((item) => item.id === selection?.decisionId) ?? null
+  const orderedRuns = useMemo(
+    () =>
+      [...(workspace?.runs ?? [])].sort((a, b) => {
+        const activeDelta = Number(isRunActive(b)) - Number(isRunActive(a))
+        return activeDelta || b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id)
+      }),
+    [workspace?.runs],
+  )
+
+  const rememberPanelTrigger = useCallback(() => {
+    const active = document.activeElement
+    if (
+      active instanceof HTMLElement &&
+      !active.closest('.inspector, .activity-center')
+    ) {
+      panelTrigger.current = active
+    }
+  }, [])
+
+  const focusVersion = useCallback((versionId: string) => {
+    focusedVersionRef.current = versionId
+    setFocusedVersionId(versionId)
+    setFocusRevision((revision) => revision + 1)
+  }, [])
+
+  const focusVersionIfNeeded = useCallback((versionId: string) => {
+    if (focusedVersionRef.current !== versionId) focusVersion(versionId)
+  }, [focusVersion])
+
+  const changeAlternative = useCallback((alternativeId: string) => {
+    panelRevision.current += 1
+    setSelectedAlternativeId(alternativeId)
+  }, [])
+
+  const closePanel = useCallback(() => {
+    panelRevision.current += 1
+    setSelection(null)
+    setSelectedAlternativeId(null)
+    setActivityOpen(false)
+    setActionError(null)
+    const trigger = panelTrigger.current
+    panelTrigger.current = null
+    window.requestAnimationFrame(() => {
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true })
+    })
+  }, [])
 
   useEffect(() => {
     if (!selection || loading || !workspace) return
@@ -261,24 +437,68 @@ function WorkspaceApp() {
     return () => window.clearTimeout(timer)
   }, [notice])
 
+  useEffect(() => {
+    if (!activityOpen) return
+    if (!orderedRuns.some((run) => run.id === selectedRunId)) {
+      setSelectedRunId(orderedRuns[0]?.id ?? null)
+    }
+  }, [activityOpen, orderedRuns, selectedRunId])
+
+  useEffect(() => {
+    if (!focusedVersionId || !workspace) return
+    if (!workspace.versions.some((version) => version.id === focusedVersionId)) {
+      focusedVersionRef.current = null
+      setFocusedVersionId(null)
+    }
+  }, [focusedVersionId, workspace])
+
   const selectDecision = useCallback(
     (versionId: string, decisionId: string) => {
+      panelRevision.current += 1
       const version = workspace?.versions.find((candidate) => candidate.id === versionId)
       const decision = version?.decisions.find((candidate) => candidate.id === decisionId)
+      rememberPanelTrigger()
+      setActivityOpen(false)
       setSelection({ versionId, decisionId })
       setSelectedAlternativeId(decision?.chosenAlternativeId ?? null)
       setActionError(null)
+      focusVersion(versionId)
     },
-    [workspace],
+    [focusVersion, rememberPanelTrigger, workspace],
   )
 
-  const generate = async () => {
-    if (!selection || !selectedAlternativeId || generatingRequest.current) return
-    const request: CreateForkRequest = {
-      baseVersionId: selection.versionId,
-      decisionId: selection.decisionId,
-      alternativeId: selectedAlternativeId,
-    }
+  const openActivity = useCallback(
+    (runId?: string) => {
+      panelRevision.current += 1
+      rememberPanelTrigger()
+      const run =
+        workspace?.runs.find((candidate) => candidate.id === runId) ?? orderedRuns[0]
+      setSelection(null)
+      setSelectedAlternativeId(null)
+      setActivityOpen(true)
+      setSelectedRunId(run?.id ?? null)
+      setActionError(null)
+      if (run) focusVersion(run.versionId)
+    },
+    [focusVersion, orderedRuns, rememberPanelTrigger, workspace?.runs],
+  )
+
+  const selectRun = useCallback(
+    (runId: string) => {
+      panelRevision.current += 1
+      setSelectedRunId(runId)
+      const run = workspace?.runs.find((candidate) => candidate.id === runId)
+      if (run) focusVersion(run.versionId)
+    },
+    [focusVersion, workspace?.runs],
+  )
+
+  const startFork = async (
+    request: CreateForkRequest,
+    destination: 'decision' | 'activity',
+  ) => {
+    if (generatingRequest.current) return
+    const destinationRevision = panelRevision.current
     generatingRequest.current = true
     setGenerating(true)
     setActionError(null)
@@ -291,19 +511,61 @@ function WorkspaceApp() {
       const nextDecision = nextVersion?.decisions.find(
         (decision) => decision.id === request.decisionId,
       )
-      if (nextVersion && nextDecision) {
-        setSelection({ versionId: nextVersion.id, decisionId: nextDecision.id })
-        setSelectedAlternativeId(nextDecision.chosenAlternativeId)
+      if (panelRevision.current === destinationRevision) {
+        if (destination === 'activity') {
+          setActivityOpen(true)
+          setSelection(null)
+          setSelectedAlternativeId(null)
+          setSelectedRunId(response.runId)
+        } else if (nextVersion && nextDecision) {
+          setSelection({ versionId: nextVersion.id, decisionId: nextDecision.id })
+          setSelectedAlternativeId(nextDecision.chosenAlternativeId)
+        }
+        focusVersion(response.versionId)
       }
-      setNotice(
-        `${workspace?.runner.mode === 'preview' ? 'Preview' : 'Fork'} queued as ${nextVersion?.name ?? response.versionId}`,
-      )
+      setNotice({
+        title: workspace?.runner.mode === 'preview' ? 'Preview started' : 'Agent dispatched',
+        detail: `${workspace?.runner.mode === 'preview' ? 'Preview' : 'Fork'} queued as ${nextVersion?.name ?? response.versionId}`,
+      })
     } catch (error) {
       setActionError(readableError(error))
     } finally {
       generatingRequest.current = false
       setGenerating(false)
     }
+  }
+
+  const generate = () => {
+    if (!selection || !selectedAlternativeId) return
+    void startFork(
+      {
+        baseVersionId: selection.versionId,
+        decisionId: selection.decisionId,
+        alternativeId: selectedAlternativeId,
+      },
+      'decision',
+    )
+  }
+
+  const copyValue = async (label: string, value: string) => {
+    try {
+      await copyText(value)
+      setActionError(null)
+      setNotice({ title: `${label} copied`, detail: value })
+    } catch {
+      setNotice(null)
+      setActionError(`Could not copy the ${label.toLowerCase()} to the clipboard.`)
+    }
+  }
+
+  const feedback: PanelFeedbackValue | null = actionError
+    ? { tone: 'error', title: 'Action failed', detail: actionError }
+    : notice
+      ? { tone: 'success', ...notice }
+      : null
+  const dismissFeedback = () => {
+    setActionError(null)
+    setNotice(null)
   }
 
   if (loading && !workspace) return <LoadingScreen />
@@ -336,6 +598,7 @@ function WorkspaceApp() {
       <Header
         activeRuns={activeRuns}
         defaultBranch={workspace.project.defaultBranch}
+        onOpenActivity={() => openActivity()}
         onRefresh={() => void refresh()}
         projectName={workspace.project.name}
         refreshing={refreshing}
@@ -354,54 +617,99 @@ function WorkspaceApp() {
         </div>
       ) : null}
 
-      <main className={`workspace ${selection ? 'workspace--inspecting' : ''}`} id="main">
+      <main className={`workspace ${selection || activityOpen ? 'workspace--inspecting' : ''}`} id="main">
         <section className="canvas" aria-label="Program version lineage">
           {workspace.versions.length ? (
             <ReactFlowProvider>
               <LineageCanvas
+                onFocusVersion={focusVersionIfNeeded}
                 onSelectDecision={selectDecision}
+                onOpenRun={openActivity}
                 runs={workspace.runs}
                 selection={selection}
                 versions={workspace.versions}
+                focusedVersionId={focusedVersionId}
+                focusRevision={focusRevision}
               />
             </ReactFlowProvider>
           ) : (
             <EmptyCanvas />
           )}
         </section>
-        <Inspector
-          decision={selectedDecision}
-          generating={generating}
-          matchingForkActive={matchingForkActive}
-          onAlternativeChange={setSelectedAlternativeId}
-          onClose={() => {
-            setSelection(null)
-            setSelectedAlternativeId(null)
-            setActionError(null)
-          }}
-          onGenerate={() => void generate()}
-          runner={workspace.runner}
-          selectedAlternativeId={selectedAlternativeId}
-          version={selectedVersion}
-        />
+        {activityOpen ? (
+          <ActivityCenter
+            feedback={feedback}
+            onClose={closePanel}
+            onCopy={(label, value) => void copyValue(label, value)}
+            onDismissFeedback={dismissFeedback}
+            onInspectDecision={selectDecision}
+            onRetry={(request) => void startFork(request, 'activity')}
+            onSelectRun={selectRun}
+            runner={workspace.runner}
+            runs={workspace.runs}
+            selectedRunId={selectedRunId}
+            starting={generating}
+            versions={workspace.versions}
+          />
+        ) : (
+          <Inspector
+            decision={selectedDecision}
+            feedback={feedback}
+            generating={generating}
+            matchingForkActive={matchingForkActive}
+            onAlternativeChange={changeAlternative}
+            onClose={closePanel}
+            onGenerate={generate}
+            onDismissFeedback={dismissFeedback}
+            runner={workspace.runner}
+            selectedAlternativeId={selectedAlternativeId}
+            version={selectedVersion}
+          />
+        )}
       </main>
 
-      {actionError ? (
+      {actionError && !activityOpen && !selection ? (
         <div className="toast toast--error" role="alert">
           <span><Icon name="warning" size={18} /></span>
-          <div><strong>Fork could not start</strong><p>{actionError}</p></div>
+          <div><strong>Action failed</strong><p>{actionError}</p></div>
           <button aria-label="Dismiss error" onClick={() => setActionError(null)} type="button"><Icon name="close" size={16} /></button>
         </div>
       ) : null}
-      {notice ? (
+      {notice && !activityOpen && !selection ? (
         <div className="toast toast--success" role="status">
           <span><Icon name="check" size={18} /></span>
-          <div><strong>{workspace.runner.mode === 'preview' ? 'Preview started' : 'Agent dispatched'}</strong><p>{notice}</p></div>
+          <div><strong>{notice.title}</strong><p>{notice.detail}</p></div>
           <button aria-label="Dismiss notification" onClick={() => setNotice(null)} type="button"><Icon name="close" size={16} /></button>
         </div>
       ) : null}
     </div>
   )
+}
+
+async function copyText(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    let timeout: number | undefined
+    const copied = await Promise.race([
+      navigator.clipboard.writeText(value).then(() => true, () => false),
+      new Promise<false>((resolve) => {
+        timeout = window.setTimeout(() => resolve(false), 1_200)
+      }),
+    ])
+    if (timeout !== undefined) window.clearTimeout(timeout)
+    if (copied) return
+  }
+
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const field = document.createElement('textarea')
+  field.value = value
+  field.setAttribute('readonly', '')
+  field.style.cssText = 'position:fixed;inset:-9999px auto auto -9999px;opacity:0'
+  document.body.append(field)
+  field.select()
+  const copied = document.execCommand('copy')
+  field.remove()
+  active?.focus({ preventScroll: true })
+  if (!copied) throw new Error('Clipboard write failed')
 }
 
 export default function App() {

@@ -4,6 +4,7 @@ import { Icon } from './Icon'
 interface RunDockProps {
   run: AgentRun
   version?: ProgramVersion
+  onOpen: () => void
 }
 
 const phaseLabel: Record<AgentRun['phase'], string> = {
@@ -34,7 +35,7 @@ function logTime(value: string): string {
   }).format(date)
 }
 
-export function RunDock({ run, version }: RunDockProps) {
+export function RunDock({ run, version, onOpen }: RunDockProps) {
   const active = ['queued', 'preparing', 'generating', 'verifying'].includes(run.phase)
   const logs = run.logs.slice(-2)
   const preview = run.mode === 'preview'
@@ -68,6 +69,10 @@ export function RunDock({ run, version }: RunDockProps) {
           ))}
         </ul>
       ) : null}
+      <button className="run-dock__open" onClick={onOpen} type="button">
+        <span>Open full activity</span>
+        <Icon name="arrow" size={15} />
+      </button>
     </section>
   )
 }

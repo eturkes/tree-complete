@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { CreateForkResponse, Workspace } from '../shared/model.js'
 import { createApp } from './app.js'
 import { execFileChecked } from './process.js'
+import type { AgentRunner } from './runners/types.js'
 
 const directories: string[] = []
 const apps: Awaited<ReturnType<typeof createApp>>[] = []
@@ -191,6 +192,7 @@ describe('HTTP API', () => {
       (version) => version.id === created.versionId,
     )
     expect(queuedVersion).toMatchObject({ parentId: 'root', status: 'queued' })
+    expect(created.workspace.runs.find((run) => run.id === created.runId)?.result).toBeUndefined()
     expect(
       queuedVersion?.decisions.find((decision) => decision.id === 'data-boundary')
         ?.chosenAlternativeId,
@@ -203,15 +205,86 @@ describe('HTTP API', () => {
     await app.forkOrchestrator.waitForIdle()
     const workspaceResponse = await app.inject({ method: 'GET', url: '/api/workspace' })
     const workspace = workspaceResponse.json<Workspace>()
-    expect(workspace.runs.find((run) => run.id === created.runId)).toMatchObject({
+    const completedRun = workspace.runs.find((run) => run.id === created.runId)
+    expect(completedRun).toMatchObject({
       phase: 'complete',
       progress: 100,
+      result: {
+        changeKind: 'simulated',
+        changedFileCount: expect.any(Number),
+        changedFiles: [],
+        changedFilesTruncated: false,
+        checks: [
+          {
+            id: 'preview-simulation',
+            status: 'simulated',
+          },
+        ],
+      },
     })
-    expect(workspace.versions.find((version) => version.id === created.versionId)).toMatchObject({
+    const completedVersion = workspace.versions.find((version) => version.id === created.versionId)
+    expect(completedVersion).toMatchObject({
       status: 'complete',
       changedFiles: expect.any(Number),
       commit: expect.stringMatching(/^preview-/),
     })
+    expect(completedVersion?.changedFiles).toBe(completedRun?.result?.changedFileCount)
+
+    const dataDir = app.treeCompleteConfig.dataDir
+    apps.splice(apps.indexOf(app), 1)
+    await app.close()
+    const reopened = await createApp({
+      config: { agentMode: 'preview', dataDir, previewPhaseDelayMs: 5 },
+    })
+    apps.push(reopened)
+    const persisted = (await reopened.inject({ method: 'GET', url: '/api/workspace' })).json<Workspace>()
+    expect(persisted.runs.find((run) => run.id === created.runId)?.result).toEqual(completedRun?.result)
+  })
+
+  it('fails closed when a runner returns invalid public evidence', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'tree-complete-invalid-evidence-'))
+    directories.push(dataDir)
+    const runner: AgentRunner = {
+      mode: 'preview',
+      async run() {
+        return {
+          commit: 'preview-invalid',
+          summary: 'Invalid evidence fixture.',
+          evidence: {
+            changeKind: 'simulated',
+            changedFileCount: -1,
+            changedFiles: [],
+            changedFilesTruncated: false,
+            checks: [{
+              id: 'preview-simulation',
+              label: 'Preview simulation',
+              detail: 'Fixture.',
+              status: 'simulated',
+            }],
+          },
+        }
+      },
+    }
+    const app = await createApp({ config: { agentMode: 'preview', dataDir }, runner })
+    apps.push(app)
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/forks',
+      payload: {
+        baseVersionId: 'root',
+        decisionId: 'data-boundary',
+        alternativeId: 'sqlite',
+      },
+    })
+    const created = response.json<CreateForkResponse>()
+    await app.forkOrchestrator.waitForIdle()
+    const workspace = (await app.inject({ method: 'GET', url: '/api/workspace' })).json<Workspace>()
+    const failedRun = workspace.runs.find((run) => run.id === created.runId)
+    expect(failedRun).toMatchObject({
+      phase: 'failed',
+      error: expect.stringMatching(/invalid result evidence/i),
+    })
+    expect(failedRun?.result).toBeUndefined()
   })
 
   it('caps concurrent forks at two', async () => {

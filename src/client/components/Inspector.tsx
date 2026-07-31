@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type {
   DecisionAlternative,
   DesignDecision,
   ProgramVersion,
   RunnerDescriptor,
 } from '../../shared/model'
+import { useInertBackground } from '../useInertBackground'
 import { Icon } from './Icon'
+import { PanelFeedback, type PanelFeedbackValue } from './PanelFeedback'
 
 interface InspectorProps {
   version: ProgramVersion | null
@@ -17,6 +19,8 @@ interface InspectorProps {
   onAlternativeChange: (alternativeId: string) => void
   onClose: () => void
   onGenerate: () => void
+  feedback: PanelFeedbackValue | null
+  onDismissFeedback: () => void
 }
 
 const signalLabel: Record<DecisionAlternative['signal'], string> = {
@@ -35,11 +39,46 @@ export function Inspector({
   onAlternativeChange,
   onClose,
   onGenerate,
+  feedback,
+  onDismissFeedback,
 }: InspectorProps) {
   const heading = useRef<HTMLHeadingElement>(null)
+  const [mobileDialog, setMobileDialog] = useState(false)
   useEffect(() => {
     if (decision) heading.current?.focus({ preventScroll: true })
   }, [decision?.id, version?.id])
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 820px)')
+    const update = () => setMobileDialog(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  useInertBackground(Boolean(decision && mobileDialog))
+
+  const handlePanelKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onClose()
+      return
+    }
+    if (event.key !== 'Tab' || !mobileDialog) return
+    const focusable = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((element) => !element.hidden && element.getClientRects().length > 0)
+    const first = focusable[0]
+    const last = focusable.at(-1)
+    if (!first || !last) return
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
 
   if (!version || !decision) {
     const preview = runner.mode === 'preview'
@@ -93,7 +132,13 @@ export function Inspector({
   }
 
   return (
-    <aside className="inspector inspector--decision" aria-labelledby="inspector-title">
+    <aside
+      aria-labelledby="inspector-title"
+      aria-modal={mobileDialog || undefined}
+      className="inspector inspector--decision"
+      onKeyDown={handlePanelKeyDown}
+      role={mobileDialog ? 'dialog' : undefined}
+    >
       <div className="inspector__topbar">
         <span className="inspector__source">
           <Icon name="branch" size={14} />
@@ -103,6 +148,11 @@ export function Inspector({
           <Icon name="close" size={18} />
         </button>
       </div>
+      <PanelFeedback
+        className="panel-feedback--inspector"
+        onDismiss={onDismissFeedback}
+        value={feedback}
+      />
 
       <div className="inspector__intro">
         <p className="section-kicker">Design decision</p>

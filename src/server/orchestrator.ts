@@ -13,6 +13,7 @@ import {
 } from '../shared/model.js'
 import { ApiProblem, asError } from './errors.js'
 import { safeSlug } from './git.js'
+import { validateRunnerEvidence } from './runners/evidence.js'
 import type { AgentRunner, RunTransition, RunnerContext } from './runners/types.js'
 import type { WorkspaceStore } from './store.js'
 
@@ -181,6 +182,7 @@ export class ForkOrchestrator {
       const context = await this.contextFor(runId)
       if (!this.runner) throw new Error('No agent runner is configured')
       const result = await this.runner.run(context)
+      const evidence = validateRunnerEvidence(result.evidence, context.run.mode)
       await this.store.update((workspace) => {
         const run = requiredRun(workspace, runId)
         const version = requiredVersion(workspace, run.versionId)
@@ -189,16 +191,21 @@ export class ForkOrchestrator {
         run.progress = 100
         run.completedAt = at
         run.error = undefined
+        run.result = evidence
         const completionLabel = run.mode === 'preview' ? 'Preview complete' : 'Fork complete'
+        const changedFileCount = evidence.changedFileCount
+        const resultDetail = evidence.changeKind === 'simulated'
+          ? `a simulated count of ${changedFileCount}`
+          : `${changedFileCount}`
         run.logs.push({
           id: randomUUID(),
           at,
-          message: `${completionLabel} at ${result.commit.slice(0, 12)} with ${result.changedFiles} affected file${result.changedFiles === 1 ? '' : 's'}.`,
+          message: `${completionLabel} at ${result.commit.slice(0, 12)} with ${resultDetail} affected file${changedFileCount === 1 ? '' : 's'}.`,
           tone: 'success',
         })
         version.status = 'complete'
         version.commit = result.commit
-        version.changedFiles = result.changedFiles
+        version.changedFiles = changedFileCount
         version.summary = result.summary
       })
     } catch (error) {

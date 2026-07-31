@@ -11,6 +11,7 @@ export interface SeedWorkspaceOptions {
   rootBranch?: string
   rootCommit?: string
   decisions?: DesignDecision[]
+  now?: () => Date
 }
 
 const SEED_TIME = '2026-01-12T09:30:00.000Z'
@@ -169,6 +170,7 @@ export function seedDecisions(): DesignDecision[] {
 }
 
 export function createSeedWorkspace(options: SeedWorkspaceOptions): Workspace {
+  const initializedAt = (options.now ?? (() => new Date()))().toISOString()
   const project: ProjectDescriptor = {
     id: options.project?.id ?? 'tree-complete',
     name: options.project?.name ?? 'Tree Complete',
@@ -196,6 +198,6 @@ export function createSeedWorkspace(options: SeedWorkspaceOptions): Workspace {
       },
     ],
     runs: [],
-    updatedAt: SEED_TIME,
+    updatedAt: initializedAt,
   }
 }

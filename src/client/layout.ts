@@ -88,8 +88,26 @@ export function layoutVersionTree(versions: ProgramVersion[]): Map<string, XYPos
   return positions
 }
 
-export function lineageEdges(versions: ProgramVersion[]): Edge[] {
+export function lineagePathVersionIds(
+  versions: ProgramVersion[],
+  focusedVersionId: string | null,
+): Set<string> {
+  const byId = new Map(versions.map((version) => [version.id, version]))
+  const path = new Set<string>()
+  let cursor = focusedVersionId ? byId.get(focusedVersionId) : undefined
+  while (cursor && !path.has(cursor.id)) {
+    path.add(cursor.id)
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined
+  }
+  return path
+}
+
+export function lineageEdges(
+  versions: ProgramVersion[],
+  focusedVersionId: string | null = null,
+): Edge[] {
   const ids = new Set(versions.map((version) => version.id))
+  const focusedPath = lineagePathVersionIds(versions, focusedVersionId)
   return versions.flatMap((version) => {
     if (!version.parentId || !ids.has(version.parentId)) return []
     const origin = version.forkOrigin
@@ -100,6 +118,8 @@ export function lineageEdges(versions: ProgramVersion[]): Edge[] {
       ? decision?.alternatives.find((candidate) => candidate.id === origin.toAlternativeId)
       : undefined
     const active = version.status === 'queued' || version.status === 'working'
+    const highlighted = focusedPath.has(version.id)
+    const muted = focusedPath.size > 0 && !highlighted && !active
 
     return [
       {
@@ -118,16 +138,18 @@ export function lineageEdges(versions: ProgramVersion[]): Edge[] {
           fontFamily: 'Geist Mono Variable, monospace',
           fontSize: 10,
           fontWeight: 620,
+          opacity: muted ? 0.42 : 1,
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
           width: 15,
           height: 15,
-          color: active ? '#3e63f4' : '#8c9790',
+          color: active || highlighted ? '#3e63f4' : '#8c9790',
         },
         style: {
-          stroke: active ? '#3e63f4' : '#8c9790',
-          strokeWidth: active ? 2.4 : 1.8,
+          stroke: active || highlighted ? '#3e63f4' : '#8c9790',
+          strokeWidth: active ? 2.5 : highlighted ? 2.2 : 1.8,
+          opacity: muted ? 0.34 : 1,
         },
       },
     ]

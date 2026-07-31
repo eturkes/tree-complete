@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 
 import { ACTIVE_RUN_PHASES, type RunnerDescriptor, type Workspace } from '../shared/model.js'
+import { validateRunnerEvidence } from './runners/evidence.js'
 
 export interface WorkspaceStoreOptions {
   dataDir: string
@@ -49,6 +50,7 @@ export class WorkspaceStore {
       const draft = structuredClone(this.workspace)
       result = await mutation(draft)
       draft.updatedAt = this.now().toISOString()
+      assertWorkspaceShape(draft)
       await this.persist(draft)
       this.workspace = draft
     })
@@ -68,12 +70,12 @@ export class WorkspaceStore {
       await this.persist(workspace)
     }
 
-    assertWorkspaceShape(workspace)
+    const evidenceNormalized = assertWorkspaceShape(workspace)
     const runnerChanged = JSON.stringify(workspace.runner) !== JSON.stringify(this.options.runner)
     workspace.runner = this.options.runner
     const interrupted = recoverInterruptedRuns(workspace, this.now())
     this.workspace = workspace
-    if (interrupted || runnerChanged) {
+    if (interrupted || runnerChanged || evidenceNormalized) {
       workspace.updatedAt = this.now().toISOString()
       await this.persist(workspace)
     }
@@ -99,7 +101,7 @@ export class WorkspaceStore {
   }
 }
 
-function assertWorkspaceShape(value: Workspace): void {
+function assertWorkspaceShape(value: Workspace): boolean {
   if (
     !value ||
     typeof value !== 'object' ||
@@ -111,6 +113,25 @@ function assertWorkspaceShape(value: Workspace): void {
   ) {
     throw new Error('Persisted workspace has an invalid shape')
   }
+  let normalized = false
+  for (const candidate of value.runs as unknown[]) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      throw new Error('Persisted workspace has an invalid run shape')
+    }
+    const run = candidate as Workspace['runs'][number]
+    if (run.result === undefined) continue
+    if (run.mode !== 'preview' && run.mode !== 'codex') {
+      throw new Error('Persisted workspace has an invalid runner mode')
+    }
+    const legacyEstimate = (run.result as unknown as { changeKind?: unknown }).changeKind === 'estimated'
+    try {
+      run.result = validateRunnerEvidence(run.result, run.mode)
+    } catch (error) {
+      throw new Error('Persisted workspace has invalid run result evidence', { cause: error })
+    }
+    normalized ||= legacyEstimate
+  }
+  return normalized
 }
 
 function recoverInterruptedRuns(workspace: Workspace, now: Date): boolean {
