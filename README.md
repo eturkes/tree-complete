@@ -11,7 +11,9 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://127.0.0.1:4317`. Preview mode is the default: it exercises validation, persistence, progress, lineage creation, and the result interface with explicitly illustrative simulation data. It does not inspect or change a repository.
+Open `http://127.0.0.1:4317`. Target-less preview mode is the default: it exercises validation, persistence, progress, lineage creation, and the result interface with explicitly illustrative Tree Complete demo data. It does not inspect a repository.
+
+When preview receives `TREE_COMPLETE_TARGET_REPO`, startup read-only inspects the canonical Git root, branch, and exact committed `HEAD`. A valid committed `.tree-complete/project.json` supplies project identity and decisions. If that file is absent, the workspace visibly labels its decisions as generic illustrative fallback data; a present but invalid manifest still fails startup. Preview simulations do not mutate project files, the index, refs, or `HEAD`. State is isolated by canonical target and baseline commit, so moving `HEAD` creates a new preview lineage while an unchanged baseline reopens its prior lineage.
 
 ```sh
 pnpm typecheck
@@ -22,13 +24,13 @@ pnpm start
 
 The production server listens at `http://127.0.0.1:4318` and serves the built client.
 
-`pnpm build` also emits the in-progress integration:
+`pnpm build` removes only `dist/server`, recompiles it, smoke-imports `createEmbeddedService`, then emits the standalone client and in-progress integration:
 
 - `dist/server/server/embedded.js` exports `createEmbeddedService({ targetRepo, dataDir, mode })`;
 - `dist/plugin/in-progress.plugin.json` describes the static `tree-complete` client and allowlists every emitted asset;
 - `dist/plugin/plugin.html` uses only relative asset URLs, so the host can serve it from its own plugin route.
 
-The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisionId, alternativeId })`, and `close()`. It reuses the same validated Fastify routes, store, orchestrator, runner, and public redaction as the standalone server. The in-progress host confirms every `tree-complete.createFork` request before calling the service; the plugin client cannot bypass that host boundary. Preview remains the default mode.
+The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisionId, alternativeId })`, and `close()`. It reuses the same validated Fastify routes, store, orchestrator, runner, and public redaction as the standalone server. The in-progress host confirms every `tree-complete.createFork` request before calling the service; the plugin client cannot bypass that host boundary. Preview remains the default mode. The embedded client applies the host theme mode, palette, and fonts; target-less standalone keeps Tree Complete’s light visual identity.
 
 `close()` rejects new calls, drains in-flight API operations, waits for every orchestrated run, then closes Fastify. Shutdown intentionally does not interrupt a valid Codex run; it can therefore take until Codex exits or reaches its runner timeout (30 minutes by default). Timeout handling terminates the managed Codex process group. Once `close()` resolves, Tree Complete has no managed agent invocation left running.
 
@@ -40,7 +42,7 @@ The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisio
 4. Follow the current run in the activity tray. A fork attempt appears immediately as a child and becomes a completed program version only after the runner succeeds.
 5. Open **Activity** for the complete run history, fork provenance, result evidence, and full curated timeline.
 
-Refreshing the page preserves the preview tree in `.tree-complete/workspace.preview.json`.
+Refreshing the page preserves the target-less demo in `.tree-complete/workspace.preview.json`. Targeted previews use `.tree-complete/workspace.preview-<digest>.json`, with the digest bound to canonical repository identity, branch, and committed baseline.
 
 ## Inspect a result
 
@@ -120,7 +122,7 @@ Configuration:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `TREE_COMPLETE_AGENT_MODE` | `preview` | `preview` or `codex` |
-| `TREE_COMPLETE_TARGET_REPO` | - | Trusted absolute Git repository with a committed manifest; required for `codex` |
+| `TREE_COMPLETE_TARGET_REPO` | - | Optional read-only preview target; trusted repository with a committed manifest required for `codex` |
 | `TREE_COMPLETE_DATA_DIR` | `.tree-complete` | State and generated worktree directory |
 | `TREE_COMPLETE_HOST` | `127.0.0.1` | Loopback API bind host: `127.0.0.1`, `::1`, or `localhost` |
 | `TREE_COMPLETE_PORT` | `4318` | API and production client port |

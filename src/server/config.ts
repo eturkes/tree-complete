@@ -76,9 +76,8 @@ export function runnerDescriptor(config: ServerConfig): RunnerDescriptor {
   }
 }
 
-export function workspaceStateKey(mode: RunnerMode, repository?: string): string {
-  if (mode === 'preview') return 'preview'
-  if (!repository) return 'codex-unconfigured'
-  const digest = createHash('sha256').update(repository).digest('hex').slice(0, 12)
-  return `codex-${digest}`
+export function workspaceStateKey(mode: RunnerMode, identity?: string): string {
+  if (!identity) return mode === 'preview' ? 'preview' : 'codex-unconfigured'
+  const digest = createHash('sha256').update(identity).digest('hex').slice(0, 12)
+  return `${mode}-${digest}`
 }

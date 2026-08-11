@@ -191,6 +191,38 @@ export async function readProjectManifestAtCommit(
   repository: string,
   commit: string,
 ): Promise<ProjectManifest> {
+  const resolvedCommit = await resolveManifestCommit(repository, commit)
+  return await readProjectManifestObject(repository, resolvedCommit)
+}
+
+export async function readProjectManifestAtCommitIfPresent(
+  repository: string,
+  commit: string,
+): Promise<ProjectManifest | undefined> {
+  const resolvedCommit = await resolveManifestCommit(repository, commit)
+  const entry = await execFileChecked(
+    'git',
+    [
+      '--no-pager',
+      '-C',
+      repository,
+      'ls-tree',
+      '--name-only',
+      '--full-tree',
+      resolvedCommit,
+      '--',
+      PROJECT_MANIFEST_PATH,
+    ],
+    { maxCaptureBytes: 512, timeoutMs: 15_000 },
+  )
+  if (entry.stdout === '') return undefined
+  if (entry.stdout !== `${PROJECT_MANIFEST_PATH}\n`) {
+    throw new ProjectManifestError('Could not resolve the committed project manifest safely.')
+  }
+  return await readProjectManifestObject(repository, resolvedCommit)
+}
+
+async function resolveManifestCommit(repository: string, commit: string): Promise<string> {
   if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(commit)) {
     throw new ProjectManifestError('Manifest commit must be a full 40- or 64-digit Git object ID.')
   }
@@ -205,6 +237,13 @@ export async function readProjectManifestAtCommit(
     throw new ProjectManifestError('Manifest commit must be the repository’s full commit ID.')
   }
 
+  return resolvedCommit
+}
+
+async function readProjectManifestObject(
+  repository: string,
+  resolvedCommit: string,
+): Promise<ProjectManifest> {
   const result = await execFileChecked(
     'git',
     [

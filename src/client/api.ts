@@ -17,7 +17,27 @@ interface PluginContext {
   apiVersion: string
   capabilities: string[]
   project: { id: string; name: string }
+  theme: PluginTheme
 }
+
+interface PluginTheme {
+  mode: 'dark' | 'light'
+  tokens: Record<string, string>
+}
+
+const THEME_PROPERTIES = {
+  background: ['--host-background', '--canvas'],
+  surface: ['--host-surface', '--paper'],
+  surfaceRaised: ['--host-surface-raised', '--paper-warm'],
+  border: ['--host-border', '--line', '--line-dark'],
+  text: ['--host-text', '--ink'],
+  muted: ['--host-muted', '--muted', '--ink-soft'],
+  accent: ['--host-accent', '--blue', '--acid'],
+  warning: ['--host-warning', '--gold'],
+  danger: ['--host-danger', '--coral'],
+  uiFont: ['--ui-font'],
+  monoFont: ['--mono-font'],
+} as const
 
 type PluginResponse =
   | { kind: 'response'; id: string; ok: true; result: unknown }
@@ -141,6 +161,7 @@ export function connectInProgress(target: Window = window): Promise<InProgressCl
         !context ||
         context.apiVersion !== PLUGIN_API_VERSION ||
         !Array.isArray(context.capabilities) ||
+        !isPluginTheme(context.theme) ||
         typeof event.data.nonce !== 'string'
       ) {
         target.clearTimeout(timer)
@@ -149,6 +170,7 @@ export function connectInProgress(target: Window = window): Promise<InProgressCl
         reject(new Error(`Unsupported in-progress host API: ${context?.apiVersion ?? 'unknown'}`))
         return
       }
+      applyPluginTheme(context.theme, target.document.documentElement)
       target.clearTimeout(timer)
       target.removeEventListener('message', receive)
       const client = new InProgressClient(context, port, target)
@@ -160,6 +182,32 @@ export function connectInProgress(target: Window = window): Promise<InProgressCl
 
     target.addEventListener('message', receive)
   })
+}
+
+function isPluginTheme(value: unknown): value is PluginTheme {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const theme = value as Partial<PluginTheme>
+  const tokens = theme.tokens
+  return (
+    (theme.mode === 'dark' || theme.mode === 'light') &&
+    Boolean(tokens) &&
+    typeof tokens === 'object' &&
+    !Array.isArray(tokens) &&
+    Object.values(tokens).every(
+      (token) => typeof token === 'string' && token.length > 0 && token.length <= 200,
+    ) &&
+    Object.keys(THEME_PROPERTIES).every((token) => typeof tokens[token] === 'string')
+  )
+}
+
+function applyPluginTheme(theme: PluginTheme, root: HTMLElement): void {
+  root.dataset.inProgressTheme = theme.mode
+  root.style.setProperty('color-scheme', theme.mode)
+  for (const [token, properties] of Object.entries(THEME_PROPERTIES)) {
+    const value = theme.tokens[token]
+    if (!value) continue
+    for (const property of properties) root.style.setProperty(property, value)
+  }
 }
 
 const pluginConnection =

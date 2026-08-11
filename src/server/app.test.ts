@@ -81,7 +81,7 @@ describe('HTTP API', () => {
     )
   })
 
-  it('loads live decisions from the exact committed manifest, not the dirty checkout', async () => {
+  it('loads targeted decisions from the exact committed manifest in preview and Codex modes', async () => {
     const root = await mkdtemp(join(tmpdir(), 'tree-complete-live-app-'))
     directories.push(root)
     const repository = join(root, 'repository')
@@ -105,18 +105,115 @@ describe('HTTP API', () => {
     const commit = (await git(repository, ['rev-parse', 'HEAD'])).trim()
     await writeFile(join(repository, '.tree-complete/project.json'), '{"dirty":true}\n')
 
+    for (const agentMode of ['preview', 'codex'] as const) {
+      const app = await createApp({
+        config: {
+          agentMode,
+          dataDir: join(root, `state-${agentMode}`),
+          targetRepo: repository,
+        },
+      })
+      apps.push(app)
+      const response = await app.inject({ method: 'GET', url: '/api/workspace' })
+      const workspace = response.json<Workspace>()
+      expect(workspace.project).toMatchObject({
+        id: 'tree-complete',
+        repository: 'git:tree-complete',
+      })
+      expect(workspace.versions[0]).toMatchObject({ commit, branch: 'main' })
+      expect(workspace.versions[0].decisions).toHaveLength(4)
+      if (agentMode === 'preview') {
+        expect(workspace.runner.detail).toMatch(/read-only simulation bound .* committed HEAD/i)
+        expect(app.workspaceStore.statePath).toMatch(/workspace\.preview-[0-9a-f]{12}\.json$/)
+      }
+    }
+  })
+
+  it('binds manifest-less preview to repository identity without mutating project or Git state', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tree-complete-preview-target-'))
+    directories.push(root)
+    const repository = join(root, 'generic-project')
+    await mkdir(repository)
+    await git(repository, ['init', '--initial-branch=main'])
+    await writeFile(join(repository, 'README.md'), '# Generic project\n')
+    await git(repository, ['add', '--all'])
+    await git(repository, [
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@localhost',
+      'commit',
+      '--message',
+      'fixture baseline',
+    ])
+    const commit = (await git(repository, ['rev-parse', 'HEAD'])).trim()
+    const before = await repositoryState(repository)
+
     const app = await createApp({
-      config: { agentMode: 'codex', dataDir: join(root, 'state'), targetRepo: repository },
+      config: {
+        agentMode: 'preview',
+        dataDir: join(root, 'state'),
+        previewPhaseDelayMs: 1,
+        targetRepo: repository,
+      },
     })
     apps.push(app)
-    const response = await app.inject({ method: 'GET', url: '/api/workspace' })
-    const workspace = response.json<Workspace>()
+    const workspace = (
+      await app.inject({ method: 'GET', url: '/api/workspace' })
+    ).json<Workspace>()
     expect(workspace.project).toMatchObject({
-      id: 'tree-complete',
-      repository: 'git:tree-complete',
+      id: 'generic-project',
+      name: 'generic-project',
+      repository: 'git:generic-project',
+      defaultBranch: 'main',
     })
-    expect(workspace.versions[0]).toMatchObject({ commit, branch: 'main' })
-    expect(workspace.versions[0].decisions).toHaveLength(4)
+    expect(workspace.runner.detail).toMatch(/decisions are generic examples/i)
+    expect(workspace.versions[0]).toMatchObject({
+      branch: 'main',
+      commit,
+      name: 'Committed HEAD · generic preview',
+      summary: expect.stringMatching(/generic illustrative decisions.*does not mutate/i),
+    })
+    expect(app.workspaceStore.statePath).toMatch(/workspace\.preview-[0-9a-f]{12}\.json$/)
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/forks',
+      payload: {
+        baseVersionId: 'root',
+        decisionId: 'data-boundary',
+        alternativeId: 'sqlite',
+      },
+    })
+    expect(response.statusCode).toBe(202)
+    await app.forkOrchestrator.waitForIdle()
+    expect(await repositoryState(repository)).toEqual(before)
+  })
+
+  it('rejects an invalid committed manifest in preview instead of treating it as absent', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tree-complete-invalid-preview-manifest-'))
+    directories.push(root)
+    const repository = join(root, 'repository')
+    await mkdir(repository)
+    await git(repository, ['init', '--initial-branch=main'])
+    await mkdir(join(repository, '.tree-complete'))
+    await writeFile(join(repository, '.tree-complete/project.json'), '{"invalid":true}\n')
+    await git(repository, ['add', '--all'])
+    await git(repository, [
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@localhost',
+      'commit',
+      '--message',
+      'invalid fixture manifest',
+    ])
+
+    await expect(
+      createApp({
+        config: { agentMode: 'preview', dataDir: join(root, 'state'), targetRepo: repository },
+      }),
+    ).rejects.toThrow(/unsupported field|schemaVersion/)
   })
 
   it('refuses live mode when the target commit has no project manifest', async () => {
@@ -313,4 +410,17 @@ async function git(repository: string, args: readonly string[]): Promise<string>
   return (
     await execFileChecked('git', ['-C', repository, ...args], { timeoutMs: 15_000 })
   ).stdout
+}
+
+async function repositoryState(repository: string): Promise<{
+  head: string
+  refs: string
+  status: string
+}> {
+  const [head, refs, status] = await Promise.all([
+    git(repository, ['rev-parse', '--verify', 'HEAD']),
+    git(repository, ['for-each-ref', '--format=%(refname) %(objectname)']),
+    git(repository, ['status', '--porcelain=v1', '--untracked-files=all']),
+  ])
+  return { head, refs, status }
 }

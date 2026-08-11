@@ -10,6 +10,8 @@ export interface SeedWorkspaceOptions {
   project?: Partial<ProjectDescriptor>
   rootBranch?: string
   rootCommit?: string
+  rootName?: string
+  rootSummary?: string
   decisions?: DesignDecision[]
   now?: () => Date
 }
@@ -188,12 +190,13 @@ export function createSeedWorkspace(options: SeedWorkspaceOptions): Workspace {
       {
         id: 'root',
         parentId: null,
-        name: 'Current design',
+        name: options.rootName ?? 'Current design',
         branch: options.rootBranch ?? project.defaultBranch,
         commit: options.rootCommit ?? 'preview-root',
         createdAt: SEED_TIME,
         status: 'ready',
-        summary: 'The baseline program and its current architectural choices.',
+        summary:
+          options.rootSummary ?? 'The baseline program and its current architectural choices.',
         decisions: structuredClone(options.decisions ?? seedDecisions()),
       },
     ],

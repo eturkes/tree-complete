@@ -181,7 +181,6 @@ interface LineageCanvasProps {
   selection: Selection | null
   onSelectDecision: (versionId: string, decisionId: string) => void
   onOpenRun: (runId: string) => void
-  onFocusVersion: (versionId: string) => void
   runs: AgentRun[]
   focusedVersionId: string | null
   focusRevision: number
@@ -192,11 +191,11 @@ function LineageCanvas({
   selection,
   onSelectDecision,
   onOpenRun,
-  onFocusVersion,
   runs,
   focusedVersionId,
   focusRevision,
 }: LineageCanvasProps) {
+  const hostTheme = document.documentElement.dataset.inProgressTheme
   const positions = useMemo(() => layoutVersionTree(versions), [versions])
   const focusedPath = useMemo(
     () => lineagePathVersionIds(versions, focusedVersionId),
@@ -216,14 +215,13 @@ function LineageCanvas({
           selectedDecisionId: selection?.versionId === version.id ? selection.decisionId : null,
           onSelectDecision,
           onOpenRun,
-          onFocusVersion,
           highlighted: version.id === focusedVersionId,
           inFocusedPath: focusedPath.has(version.id),
         },
         draggable: false,
         selectable: false,
       })),
-    [focusedPath, focusedVersionId, onFocusVersion, onOpenRun, onSelectDecision, positions, runs, selection, versions],
+    [focusedPath, focusedVersionId, onOpenRun, onSelectDecision, positions, runs, selection, versions],
   )
   const edges = useMemo(() => lineageEdges(versions, focusedVersionId), [focusedVersionId, versions])
   const { fitView, getNode } = useReactFlow<VersionFlowNode>()
@@ -296,7 +294,7 @@ function LineageCanvas({
 
   return (
     <ReactFlow<VersionFlowNode>
-      colorMode="light"
+      colorMode={hostTheme === 'dark' ? 'dark' : 'light'}
       defaultEdgeOptions={{ type: 'smoothstep' }}
       edges={edges}
       maxZoom={1.3}
@@ -311,28 +309,24 @@ function LineageCanvas({
       proOptions={{ hideAttribution: true }}
       selectionOnDrag={false}
     >
-      <Background color="#aeb7ad" gap={24} size={1.15} variant={BackgroundVariant.Dots} />
+      <Background color="var(--line-dark)" gap={24} size={1.15} variant={BackgroundVariant.Dots} />
       <Controls position="bottom-right" showInteractive={false} />
       {versions.length > 2 ? (
         <MiniMap
           ariaLabel="Version lineage overview"
           className="lineage-minimap"
-          maskColor="rgba(232, 234, 223, 0.72)"
+          maskColor="var(--minimap-mask)"
           nodeColor={(node) => {
             const status = (node.data as VersionNodeData).version.status
-            if (status === 'failed') return '#ff715e'
-            if (status === 'working' || status === 'queued') return '#3e63f4'
-            return '#29473e'
+            if (status === 'failed') return 'var(--coral)'
+            if (status === 'working' || status === 'queued') return 'var(--blue)'
+            return 'var(--minimap-node)'
           }}
           pannable
           position="top-right"
           zoomable
         />
       ) : null}
-      <Panel className="canvas-label" position="top-left">
-        <span>Version lineage</span>
-        <strong>{versions.length} version{versions.length === 1 ? '' : 's'}</strong>
-      </Panel>
       {latestRun ? (
         <Panel className="run-panel" position="bottom-left">
           <RunDock onOpen={() => onOpenRun(latestRun.id)} run={latestRun} version={runVersion} />
@@ -364,7 +358,6 @@ function WorkspaceApp() {
   const [focusRevision, setFocusRevision] = useState(0)
   const panelTrigger = useRef<HTMLElement | null>(null)
   const panelRevision = useRef(0)
-  const focusedVersionRef = useRef<string | null>(null)
 
   const selectedVersion = workspace?.versions.find((item) => item.id === selection?.versionId) ?? null
   const selectedDecision =
@@ -389,14 +382,9 @@ function WorkspaceApp() {
   }, [])
 
   const focusVersion = useCallback((versionId: string) => {
-    focusedVersionRef.current = versionId
     setFocusedVersionId(versionId)
     setFocusRevision((revision) => revision + 1)
   }, [])
-
-  const focusVersionIfNeeded = useCallback((versionId: string) => {
-    if (focusedVersionRef.current !== versionId) focusVersion(versionId)
-  }, [focusVersion])
 
   const changeAlternative = useCallback((alternativeId: string) => {
     panelRevision.current += 1
@@ -447,7 +435,6 @@ function WorkspaceApp() {
   useEffect(() => {
     if (!focusedVersionId || !workspace) return
     if (!workspace.versions.some((version) => version.id === focusedVersionId)) {
-      focusedVersionRef.current = null
       setFocusedVersionId(null)
     }
   }, [focusedVersionId, workspace])
@@ -622,7 +609,6 @@ function WorkspaceApp() {
           {workspace.versions.length ? (
             <ReactFlowProvider>
               <LineageCanvas
-                onFocusVersion={focusVersionIfNeeded}
                 onSelectDecision={selectDecision}
                 onOpenRun={openActivity}
                 runs={workspace.runs}

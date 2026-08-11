@@ -32,11 +32,24 @@ function fakeWindow(): {
   target: Window
   parent: object
   receive: () => (event: MessageEvent) => void
+  theme: { dataset: Record<string, string>; properties: Map<string, string> }
 } {
   const parent = {}
   const listeners = new Map<string, EventListener>()
+  const dataset: Record<string, string> = {}
+  const properties = new Map<string, string>()
   const target = {
     parent,
+    document: {
+      documentElement: {
+        dataset,
+        style: {
+          setProperty(name: string, value: string) {
+            properties.set(name, value)
+          },
+        },
+      },
+    },
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
     addEventListener(name: string, listener: EventListener) {
@@ -50,8 +63,26 @@ function fakeWindow(): {
     target,
     parent,
     receive: () => listeners.get('message') as (event: MessageEvent) => void,
+    theme: { dataset, properties },
   }
 }
+
+const darkTheme = {
+  mode: 'dark',
+  tokens: {
+    background: '#0b0e14',
+    surface: '#121722',
+    surfaceRaised: '#18202c',
+    border: '#283142',
+    text: '#e7ecf4',
+    muted: '#909cb0',
+    accent: '#67d5b5',
+    warning: '#f2b84b',
+    danger: '#ff6b78',
+    uiFont: 'Atkinson Hyperlegible Next',
+    monoFont: 'Iosevka',
+  },
+} as const
 
 describe('in-progress plugin transport', () => {
   it('verifies the handshake and carries typed request/response messages', async () => {
@@ -67,6 +98,7 @@ describe('in-progress plugin transport', () => {
           apiVersion: '1.0',
           capabilities: ['tree-complete.workspace', 'tree-complete.createFork'],
           project: { id: 'fixture', name: 'Fixture' },
+          theme: darkTheme,
         },
       },
       ports: [port as unknown as MessagePort],
@@ -80,6 +112,13 @@ describe('in-progress plugin transport', () => {
         payload: { state: 'busy', badge: null, title: 'Loading Tree Complete' },
       },
     ])
+    expect(host.theme.dataset.inProgressTheme).toBe('dark')
+    expect(host.theme.properties.get('color-scheme')).toBe('dark')
+    expect(host.theme.properties.get('--canvas')).toBe('#0b0e14')
+    expect(host.theme.properties.get('--paper')).toBe('#121722')
+    expect(host.theme.properties.get('--host-surface-raised')).toBe('#18202c')
+    expect(host.theme.properties.get('--ink')).toBe('#e7ecf4')
+    expect(host.theme.properties.get('--ui-font')).toBe('Atkinson Hyperlegible Next')
 
     const workspace = client.call<{ project: string }>('tree-complete.workspace')
     const request = port.messages.at(-1) as { id: string; method: string }
@@ -97,7 +136,7 @@ describe('in-progress plugin transport', () => {
       data: {
         type: 'in-progress:init',
         nonce: 'nonce-2',
-        context: { apiVersion: '2.0', capabilities: [], project: {} },
+        context: { apiVersion: '2.0', capabilities: [], project: {}, theme: darkTheme },
       },
       ports: [port as unknown as MessagePort],
     } as unknown as MessageEvent)
@@ -112,7 +151,12 @@ describe('in-progress plugin transport', () => {
       data: {
         type: 'in-progress:init',
         nonce: 'nonce-3',
-        context: { apiVersion: '1.0', capabilities: [], project: { id: 'fixture' } },
+        context: {
+          apiVersion: '1.0',
+          capabilities: [],
+          project: { id: 'fixture' },
+          theme: darkTheme,
+        },
       },
       ports: [compatiblePort as unknown as MessagePort],
     } as unknown as MessageEvent)
@@ -120,6 +164,29 @@ describe('in-progress plugin transport', () => {
     await expect(client.call('tree-complete.workspace')).rejects.toThrow(
       'Capability not granted: tree-complete.workspace',
     )
+  })
+
+  it('rejects an API 1.0 handshake without the required host theme', async () => {
+    const host = fakeWindow()
+    const port = new FakePort()
+    const rejected = connectInProgress(host.target)
+    host.receive()({
+      source: host.parent as WindowProxy,
+      data: {
+        type: 'in-progress:init',
+        nonce: 'nonce-without-theme',
+        context: {
+          apiVersion: '1.0',
+          capabilities: ['tree-complete.workspace'],
+          project: { id: 'fixture', name: 'Fixture' },
+        },
+      },
+      ports: [port as unknown as MessagePort],
+    } as unknown as MessageEvent)
+
+    await expect(rejected).rejects.toThrow('Unsupported in-progress host API: 1.0')
+    expect(port.closed).toBe(true)
+    expect(host.theme.dataset.inProgressTheme).toBeUndefined()
   })
 })
 

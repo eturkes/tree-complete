@@ -52,7 +52,7 @@
 .activity-center__provenance p {
   margin: 0;
   color: var(--blue, #3e63f4);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -91,7 +91,7 @@
   border: 1px solid var(--line, #cdd2c8);
   border-radius: 10px;
   color: var(--ink-soft, #33423c);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
@@ -166,7 +166,7 @@
   border-radius: 999px;
   background: #e5e8df;
   color: var(--muted, #68756e);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 12px;
   font-weight: 650;
 }
@@ -290,7 +290,7 @@
 
 .activity-center__run-percent {
   align-self: center;
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 11px;
   font-weight: 650;
   text-align: right;
@@ -317,7 +317,7 @@
   align-items: center;
   gap: 7px;
   color: var(--muted, #68756e);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -361,7 +361,7 @@
 
 .activity-center__progress-value strong {
   color: var(--blue, #3e63f4);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 24px;
 }
 
@@ -415,7 +415,7 @@
 
 .activity-center__metadata dt {
   color: var(--muted, #68756e);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -463,7 +463,7 @@
 
 .activity-center__choice-change small {
   color: var(--muted, #68756e);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 11px;
   text-transform: uppercase;
 }
@@ -553,7 +553,7 @@
 }
 
 .activity-center__file-count strong {
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 27px;
   line-height: 1;
 }
@@ -588,7 +588,7 @@
 .activity-center__files code {
   display: block;
   color: var(--ink-soft, #33423c);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 12px;
   overflow-wrap: anywhere;
   white-space: normal;
@@ -655,7 +655,7 @@
 
 .activity-center__checks em {
   color: var(--muted, #68756e);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 11px;
   font-style: normal;
   font-weight: 650;
@@ -708,7 +708,7 @@
 
 .activity-center__log time {
   color: var(--muted, #68756e);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 12px;
 }
 
@@ -736,7 +736,7 @@
 .activity-center__copy-field > span {
   grid-column: 1 / -1;
   color: var(--muted, #68756e);
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -745,7 +745,7 @@
 
 .activity-center__copy-field code {
   overflow: hidden;
-  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-family: var(--mono-font), ui-monospace, monospace;
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1014,4 +1014,76 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__dialog,
+:root[data-in-progress-theme='dark'] .activity-center__header,
+:root[data-in-progress-theme='dark'] .activity-center__detail {
+  border-color: var(--host-border);
+  background: var(--host-surface);
+  color: var(--host-text);
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__history {
+  border-color: var(--host-border);
+  background: var(--host-surface-raised);
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__close,
+:root[data-in-progress-theme='dark'] .activity-center__run,
+:root[data-in-progress-theme='dark'] .activity-center__metadata,
+:root[data-in-progress-theme='dark'] .activity-center__provenance,
+:root[data-in-progress-theme='dark'] .activity-center__provenance > button,
+:root[data-in-progress-theme='dark'] .activity-center__actions > button,
+:root[data-in-progress-theme='dark'] .activity-center__result-card,
+:root[data-in-progress-theme='dark'] .activity-center__timeline,
+:root[data-in-progress-theme='dark'] .activity-center__technical,
+:root[data-in-progress-theme='dark'] .activity-center__copy-field button {
+  border-color: var(--host-border);
+  background: var(--host-surface-raised);
+  color: var(--host-text);
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__close:hover,
+:root[data-in-progress-theme='dark'] .activity-center__run:hover,
+:root[data-in-progress-theme='dark'] .activity-center__run--selected {
+  background: color-mix(in srgb, var(--host-surface-raised) 82%, var(--host-accent));
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__run-progress,
+:root[data-in-progress-theme='dark'] .activity-center__progress {
+  background: var(--host-border);
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__metadata div,
+:root[data-in-progress-theme='dark'] .activity-center__checks li,
+:root[data-in-progress-theme='dark'] .activity-center__log {
+  border-color: var(--host-border);
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__failure {
+  border-color: color-mix(in srgb, var(--host-danger) 55%, var(--host-border));
+  background: color-mix(in srgb, var(--host-danger) 14%, var(--host-surface));
+  color: var(--host-danger);
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__check-icon,
+:root[data-in-progress-theme='dark'] .activity-center__failure > span {
+  background: var(--host-border);
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__actions {
+  background: var(--host-surface-raised);
+  color: var(--host-text);
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__actions > button {
+  background: var(--host-accent);
+  color: var(--host-background);
+}
+
+:root[data-in-progress-theme='dark'] .activity-center__empty > span,
+:root[data-in-progress-theme='dark'] .activity-center__header-icon {
+  background: var(--host-surface-raised);
+  color: var(--host-accent);
 }

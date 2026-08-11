@@ -10,7 +10,6 @@ export interface VersionNodeData extends Record<string, unknown> {
   selectedDecisionId: string | null
   onSelectDecision: (versionId: string, decisionId: string) => void
   onOpenRun: (runId: string) => void
-  onFocusVersion: (versionId: string) => void
   highlighted: boolean
   inFocusedPath: boolean
 }
@@ -36,7 +35,6 @@ export function VersionNode({ data }: NodeProps<VersionFlowNode>) {
     selectedDecisionId,
     onSelectDecision,
     onOpenRun,
-    onFocusVersion,
     highlighted,
     inFocusedPath,
   } = data
@@ -55,7 +53,6 @@ export function VersionNode({ data }: NodeProps<VersionFlowNode>) {
   return (
     <article
       className={`version-node version-node--${version.status} ${highlighted ? 'version-node--highlighted' : inFocusedPath ? 'version-node--path' : ''}`}
-      onFocusCapture={() => onFocusVersion(version.id)}
       style={{ width: `min(${VERSION_NODE_WIDTH}px, calc(100vw - 24px))` }}
       aria-label={`${version.name}, ${displayedStatus}`}
     >

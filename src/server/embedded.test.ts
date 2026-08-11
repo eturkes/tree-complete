@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -94,9 +94,11 @@ describe('embedded service', () => {
     const response = await responsePending
     await closing
 
-    const persisted = JSON.parse(
-      await readFile(join(dataDir, 'workspace.preview.json'), 'utf8'),
-    ) as Workspace
+    const stateFiles = (await readdir(dataDir)).filter((name) =>
+      /^workspace\.preview-[0-9a-f]{12}\.json$/.test(name),
+    )
+    expect(stateFiles).toHaveLength(1)
+    const persisted = JSON.parse(await readFile(join(dataDir, stateFiles[0]), 'utf8')) as Workspace
     expect(persisted.runs.find((run) => run.id === response.runId)?.phase).toBe('complete')
     expect(persisted.versions.find((version) => version.id === response.versionId)?.status).toBe(
       'complete',

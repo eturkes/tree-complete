@@ -23,4 +23,4 @@
 - Paginated/archive projections; configurable run/log/version retention.
 - Safe worktree/branch inspection + recoverable cleanup workflow.
 - Adversarial subprocess tests: timeout, history mutation, descendants + hostile Git environment.
-- Automated browser regressions for activity/retry/copy/modal/responsive workflows.
+- Automated browser regressions for standalone + in-progress host theme, pointer selection, activity/retry/copy/modal + responsive workflows.

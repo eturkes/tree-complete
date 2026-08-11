@@ -16,6 +16,7 @@ import { inspectGitRepository, safeSlug, type GitRepositoryMetadata } from './gi
 import {
   manifestToDesignDecisions,
   readProjectManifestAtCommit,
+  readProjectManifestAtCommitIfPresent,
   type ProjectManifest,
 } from './manifest.js'
 import { ForkOrchestrator } from './orchestrator.js'
@@ -45,14 +46,26 @@ export interface CreateAppOptions {
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   let config = loadServerConfig(options.config)
   let repository: GitRepositoryMetadata | undefined
-  if (config.agentMode === 'codex' && config.targetRepo) {
+  if (config.targetRepo) {
     repository = await inspectGitRepository(config.targetRepo)
     config = { ...config, targetRepo: repository.root }
   }
   const manifest: ProjectManifest | undefined = repository
-    ? await readProjectManifestAtCommit(repository.root, repository.commit)
+    ? config.agentMode === 'codex'
+      ? await readProjectManifestAtCommit(repository.root, repository.commit)
+      : await readProjectManifestAtCommitIfPresent(repository.root, repository.commit)
     : undefined
-  const descriptor = runnerDescriptor(config)
+  const descriptor = repository && config.agentMode === 'preview'
+    ? {
+        ...runnerDescriptor(config),
+        detail: manifest
+          ? `Read-only simulation bound to ${repository.name} at committed HEAD ${shortCommit(repository.commit)}; target files and Git refs stay unchanged.`
+          : `Read-only simulation bound to ${repository.name} at committed HEAD ${shortCommit(repository.commit)}; no committed .tree-complete/project.json exists, so decisions are generic examples and project files and Git state stay unchanged.`,
+      }
+    : runnerDescriptor(config)
+  const genericRepositoryPreview = Boolean(
+    repository && config.agentMode === 'preview' && !manifest,
+  )
   const seed =
     options.seed ??
     (() =>
@@ -65,12 +78,18 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
                 name: manifest?.project.name ?? repository.name,
                 description:
                   manifest?.project.description ??
-                  `Design-decision workspace for ${repository.name}.`,
+                  (genericRepositoryPreview
+                    ? `Read-only preview of ${repository.name}. No committed .tree-complete/project.json was found; displayed decisions are generic simulation examples.`
+                    : `Design-decision workspace for ${repository.name}.`),
                 repository: `git:${manifest?.project.id ?? safeSlug(repository.name, 'project')}`,
                 defaultBranch: repository.branch,
               },
               rootBranch: repository.branch,
               rootCommit: repository.commit,
+              rootName: genericRepositoryPreview ? 'Committed HEAD · generic preview' : 'Committed design',
+              rootSummary: genericRepositoryPreview
+                ? `Generic illustrative decisions at committed HEAD ${shortCommit(repository.commit)}; no .tree-complete/project.json was found and preview does not mutate project files or Git state.`
+                : `Manifest-backed baseline at committed HEAD ${shortCommit(repository.commit)}.`,
               decisions: manifest ? manifestToDesignDecisions(manifest) : undefined,
             }
           : {}),
@@ -82,7 +101,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       stateKey: workspaceStateKey(
         config.agentMode,
         repository
-          ? `${repository.root}\0${manifest?.project.id ?? 'unconfigured'}\0manifest-v1`
+          ? config.agentMode === 'preview'
+            ? `${repository.root}\0${repository.branch}\0${repository.commit}\0${manifest?.project.id ?? 'generic'}\0preview-v1`
+            : `${repository.root}\0${manifest?.project.id ?? 'unconfigured'}\0manifest-v1`
           : undefined,
       ),
       seed,
@@ -183,6 +204,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   })
 
   return app
+}
+
+function shortCommit(commit: string): string {
+  return commit.slice(0, 12)
 }
 
 function createRunner(config: ServerConfig): AgentRunner | undefined {
