@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   MAX_RUN_RESULT_CHANGED_FILES,
@@ -26,11 +26,12 @@ const exec = promisify(execFile)
 const directories: string[] = []
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await Promise.all(directories.splice(0).map(async (path) => await rm(path, { recursive: true })))
 })
 
 describe('CodexRunner', () => {
-  it('pins a worktree, invokes a constrained Codex process, and creates the host-owned commit', async () => {
+  it('pins a worktree, invokes canonical Codex, and creates the host-owned commit', async () => {
     const root = await mkdtemp(join(tmpdir(), 'tree-complete-live-'))
     directories.push(root)
     const repository = join(root, 'repository')
@@ -59,6 +60,7 @@ describe('CodexRunner', () => {
     const baseCommit = stdout.trim()
 
     const fakeCodex = join(root, 'fake-codex.cjs')
+    vi.stubEnv('TREE_COMPLETE_CODEX_ENV_FIXTURE', 'inherited')
     await writeFile(
       fakeCodex,
       '#!/usr/bin/env node\n' +
@@ -73,7 +75,8 @@ describe('CodexRunner', () => {
         "fs.writeFileSync('02-e\\u0301.txt', 'implemented\\n');\n" +
         "fs.writeFileSync(Buffer.from([0x30, 0x33, 0x2d, 0x80, 0x2e, 0x74, 0x78, 0x74]), 'implemented\\n');\n" +
         "fs.writeFileSync(Buffer.from([0x30, 0x33, 0x2d, 0x81, 0x2e, 0x74, 0x78, 0x74]), 'implemented\\n');\n" +
-        "fs.writeFileSync('codex-args.json', JSON.stringify(process.argv.slice(2)));\n",
+        "fs.writeFileSync('codex-args.json', JSON.stringify(process.argv.slice(2)));\n" +
+        "fs.writeFileSync('codex-env.txt', process.env.TREE_COMPLETE_CODEX_ENV_FIXTURE || 'missing');\n",
     )
     await chmod(fakeCodex, 0o700)
 
@@ -137,7 +140,7 @@ describe('CodexRunner', () => {
     expect(result.commit).not.toBe(baseCommit)
     expect(result.evidence).toMatchObject({
       changeKind: 'measured',
-      changedFileCount: 529,
+      changedFileCount: 530,
       changedFilesTruncated: true,
       checks: [
         { id: 'worktree-state', status: 'passed' },
@@ -171,9 +174,11 @@ describe('CodexRunner', () => {
       'verifying',
     ])
     const args = JSON.parse(await readFile(join(worktree, 'codex-args.json'), 'utf8')) as string[]
-    expect(args).toContain('--ignore-user-config')
-    expect(args).toContain('never')
-    expect(args).toContain('workspace-write')
+    expect(args.slice(0, 2)).toEqual(['--yolo', 'exec'])
+    expect(args).not.toContain('--ignore-user-config')
+    expect(args).not.toContain('--sandbox')
+    expect(args).not.toContain('--model')
+    expect(await readFile(join(worktree, 'codex-env.txt'), 'utf8')).toBe('inherited')
     const log = await exec('git', ['-C', worktree, 'show', '-s', '--format=%an <%ae>', 'HEAD'])
     expect(log.stdout.trim()).toBe('Tree Complete <tree-complete@localhost>')
     expect((await readWorktreeManifest(worktree)).decisions[0].chosenAlternativeId).toBe('sqlite')

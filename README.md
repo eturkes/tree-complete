@@ -22,6 +22,16 @@ pnpm start
 
 The production server listens at `http://127.0.0.1:4318` and serves the built client.
 
+`pnpm build` also emits the in-progress integration:
+
+- `dist/server/server/embedded.js` exports `createEmbeddedService({ targetRepo, dataDir, mode })`;
+- `dist/plugin/in-progress.plugin.json` describes the static `tree-complete` client and allowlists every emitted asset;
+- `dist/plugin/plugin.html` uses only relative asset URLs, so the host can serve it from its own plugin route.
+
+The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisionId, alternativeId })`, and `close()`. It reuses the same validated Fastify routes, store, orchestrator, runner, and public redaction as the standalone server. The in-progress host confirms every `tree-complete.createFork` request before calling the service; the plugin client cannot bypass that host boundary. Preview remains the default mode.
+
+`close()` rejects new calls, drains in-flight API operations, waits for every orchestrated run, then closes Fastify. Shutdown intentionally does not interrupt a valid Codex run; it can therefore take until Codex exits or reaches its runner timeout (30 minutes by default). Timeout handling terminates the managed Codex process group. Once `close()` resolves, Tree Complete has no managed agent invocation left running.
+
 ## Create a fork
 
 1. Select a decision row inside any version card.
@@ -99,11 +109,11 @@ export TREE_COMPLETE_TARGET_REPO=/absolute/path/to/repository
 pnpm dev
 ```
 
-At startup, the service reads the manifest from the target’s exact committed `HEAD`; dirty manifest edits are ignored. For each request it creates a sanitized `tree-complete/...` branch from the selected version’s immutable full commit, records the selected choice in the fork’s manifest, feeds Codex the structured brief over stdin, and runs it with a workspace-write sandbox. Codex is asked to discover and run checks relevant to its edits. The host independently requires a non-empty implementation diff beyond the manifest, a whitespace-clean patch, the expected worktree/manifest identity, and a clean direct-child commit. Those host checks do not attest that the target project’s tests passed. The source checkout stays untouched. Failed and successful worktrees remain available for local inspection and appear in `git worktree list` from the target repository.
+At startup, the service reads the manifest from the target’s exact committed `HEAD`; dirty manifest edits are ignored. For each request it creates a sanitized `tree-complete/...` branch from the selected version’s immutable full commit, records the selected choice in the fork’s manifest, and feeds Codex the structured brief over stdin. The runner invokes the user’s canonical `codex --yolo exec` runtime from that worktree. It inherits the Tree Complete process environment, user configuration, configured GPT model and reasoning effort, and applicable instructions; `--yolo` disables approval and sandbox enforcement. Codex is asked to discover and run checks relevant to its edits. The host independently requires a non-empty implementation diff beyond the manifest, a whitespace-clean patch, the expected worktree/manifest identity, and a clean direct-child commit. Those host checks do not attest that the target project’s tests passed. The source checkout stays untouched. Failed and successful worktrees remain available for local inspection and appear in `git worktree list` from the target repository.
 
 A persisted workspace stays pinned to the baseline commit from which it was created. Moving the target repository’s `HEAD` does not silently replace that lineage. Point `TREE_COMPLETE_DATA_DIR` at a new empty directory when you intentionally want a separate workspace rooted at the newer commit.
 
-Live mode is intentionally limited to trusted, same-user repositories. Repository instructions and Git filters are code-execution surfaces; untrusted repositories need a separate container or operating-system identity beyond this local tool’s boundary.
+`--yolo` gives Codex unsandboxed, non-interactive authority as the same operating-system user running Tree Complete. The agent can reach anything that user can reach, not only the generated worktree. Live mode is therefore limited to trusted repositories and trusted instructions. Repository instructions and Git filters are code-execution surfaces; use a separate container or operating-system identity for untrusted input.
 
 Configuration:
 
@@ -128,6 +138,9 @@ React Flow canvas
 Fastify API → validated commit manifest → atomic JSON store → fork orchestrator
                                 ├─ preview runner
                                 └─ Git worktree → Codex runner
+
+in-progress host → MessagePort API 1.0 → static React client
+                 └─ embedded service → the same Fastify/orchestrator stack
 ```
 
 The shared TypeScript model is the boundary between UI and service. The server owns request validation, branch naming, persistence, and agent execution; the client owns selection and visualization only.
@@ -137,5 +150,7 @@ The shared TypeScript model is the boundary between UI and service. The server o
 - `GET /api/health` - readiness, runner mode, and availability
 - `GET /api/workspace` - project, versions, decisions, runs, bounded result evidence, and curated logs
 - `POST /api/forks` - `{ baseVersionId, decisionId, alternativeId }`
+
+The in-progress client maps those public operations to `tree-complete.workspace` and `tree-complete.createFork`. Both transports return the same public `Workspace` and `CreateForkResponse` shapes; host filesystem paths remain redacted.
 
 Only alternatives already defined on the selected decision are accepted. Selecting the current choice, requesting an existing active fork, or referring to a mismatched decision is rejected.

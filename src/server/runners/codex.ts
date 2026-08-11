@@ -88,15 +88,9 @@ export class CodexRunner implements AgentRunner {
       await spawnCaptured(
         this.codexExecutable,
         [
-          '--ask-for-approval',
-          'never',
+          '--yolo',
           'exec',
-          '--ignore-user-config',
-          '-c',
-          'shell_environment_policy.inherit="none"',
           '--ephemeral',
-          '--sandbox',
-          'workspace-write',
           '-C',
           worktree,
           '-',
@@ -106,7 +100,6 @@ export class CodexRunner implements AgentRunner {
           input: focusedPrompt(context),
           maxCaptureBytes: 64 * 1024,
           timeoutMs: this.timeoutMs,
-          env: codexEnvironment(),
         },
       )
     } catch (error) {
@@ -312,20 +305,6 @@ function safeGitEnvironment(): NodeJS.ProcessEnv {
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0',
   })
-}
-
-function codexEnvironment(): NodeJS.ProcessEnv {
-  return selectedEnvironment([
-    'PATH',
-    'HOME',
-    'CODEX_HOME',
-    'OPENAI_API_KEY',
-    'LANG',
-    'LC_ALL',
-    'TMPDIR',
-    'SSL_CERT_FILE',
-    'SSL_CERT_DIR',
-  ], { NO_COLOR: '1' })
 }
 
 function selectedEnvironment(
