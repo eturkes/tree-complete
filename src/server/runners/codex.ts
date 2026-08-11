@@ -8,7 +8,7 @@ import {
   MAX_RUN_RESULT_CHANGED_FILES,
   MAX_RUN_RESULT_CHANGED_FILE_LENGTH,
 } from '../../shared/model.js'
-import { safeSlug } from '../git.js'
+import { isolatedGitEnvironment, safeSlug } from '../git.js'
 import {
   PROJECT_MANIFEST_PATH,
   assertWorktreeManifestMatches,
@@ -293,30 +293,7 @@ function assertSameIdentity(expected: WorktreeIdentity, actual: WorktreeIdentity
 }
 
 function safeGitEnvironment(): NodeJS.ProcessEnv {
-  return selectedEnvironment([
-    'PATH',
-    'LANG',
-    'LC_ALL',
-    'TMPDIR',
-    'SSL_CERT_FILE',
-    'SSL_CERT_DIR',
-  ], {
-    GIT_CONFIG_GLOBAL: '/dev/null',
-    GIT_CONFIG_NOSYSTEM: '1',
-    GIT_TERMINAL_PROMPT: '0',
-  })
-}
-
-function selectedEnvironment(
-  names: readonly string[],
-  additions: Record<string, string>,
-): NodeJS.ProcessEnv {
-  const environment: NodeJS.ProcessEnv = { ...additions }
-  for (const name of names) {
-    const value = process.env[name]
-    if (value !== undefined) environment[name] = value
-  }
-  return environment
+  return isolatedGitEnvironment(['SSL_CERT_FILE', 'SSL_CERT_DIR'])
 }
 
 function focusedPrompt(context: RunnerContext): string {

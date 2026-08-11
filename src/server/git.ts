@@ -17,7 +17,7 @@ export async function inspectGitRepository(path: string): Promise<GitRepositoryM
   }
   const bare = (
     await execFileChecked('git', ['-C', candidate, 'rev-parse', '--is-bare-repository'], {
-      env: readOnlyGitEnvironment(),
+      env: isolatedGitEnvironment(),
       timeoutMs: 15_000,
     })
   ).stdout.trim()
@@ -27,12 +27,12 @@ export async function inspectGitRepository(path: string): Promise<GitRepositoryM
   const rootOutput = await execFileChecked(
     'git',
     ['-C', candidate, 'rev-parse', '--show-toplevel'],
-    { env: readOnlyGitEnvironment(), timeoutMs: 15_000 },
+    { env: isolatedGitEnvironment(), timeoutMs: 15_000 },
   )
   const root = await realpath(rootOutput.stdout.trim())
   const commit = (
     await execFileChecked('git', ['-C', root, 'rev-parse', '--verify', 'HEAD^{commit}'], {
-      env: readOnlyGitEnvironment(),
+      env: isolatedGitEnvironment(),
       timeoutMs: 15_000,
     })
   ).stdout.trim()
@@ -41,7 +41,7 @@ export async function inspectGitRepository(path: string): Promise<GitRepositoryM
   try {
     branch = (
       await execFileChecked('git', ['-C', root, 'symbolic-ref', '--quiet', '--short', 'HEAD'], {
-        env: readOnlyGitEnvironment(),
+        env: isolatedGitEnvironment(),
         timeoutMs: 15_000,
       })
     ).stdout.trim()
@@ -52,13 +52,21 @@ export async function inspectGitRepository(path: string): Promise<GitRepositoryM
   return { root, branch, commit, name: basename(root) }
 }
 
-function readOnlyGitEnvironment(): NodeJS.ProcessEnv {
+export function isolatedGitEnvironment(
+  additionalNames: readonly string[] = [],
+): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {
     GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'advice.graftFileDeprecated',
+    GIT_CONFIG_VALUE_0: 'false',
     GIT_TERMINAL_PROMPT: '0',
+    GIT_NO_REPLACE_OBJECTS: '1',
+    GIT_GRAFT_FILE: '/dev/null',
+    GIT_SHALLOW_FILE: '/dev/null',
   }
-  for (const name of ['PATH', 'LANG', 'LC_ALL', 'TMPDIR']) {
+  for (const name of ['PATH', 'LANG', 'LC_ALL', 'TMPDIR', ...additionalNames]) {
     const value = process.env[name]
     if (value !== undefined) environment[name] = value
   }

@@ -77,8 +77,19 @@ export interface AgentRunResult {
   checks: RunCheckResult[]
 }
 
+// Matches the in-progress host's maximum encoded Tree Complete result.
+export const TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES = 4 * 1024 * 1024
 export const MAX_RUN_RESULT_CHANGED_FILES = 40
 export const MAX_RUN_RESULT_CHANGED_FILE_LENGTH = 240
+export const MAX_RUN_RESULT_CHECKS = 16
+export const MAX_RUN_RESULT_CHECK_ID_LENGTH = 64
+export const MAX_RUN_RESULT_CHECK_LABEL_LENGTH = 120
+export const MAX_RUN_RESULT_CHECK_DETAIL_LENGTH = 500
+export const MAX_RUN_RESULT_COMMIT_LENGTH = 128
+export const MAX_RUN_RESULT_SUMMARY_LENGTH = 2_000
+export const MAX_RUN_LOG_ENTRIES = 8
+export const MAX_RUN_LOG_MESSAGE_LENGTH = 500
+export const MAX_RUN_WORKTREE_PATH_LENGTH = 4_096
 
 export interface AgentRun {
   id: string

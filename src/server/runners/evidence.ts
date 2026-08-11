@@ -1,4 +1,8 @@
 import {
+  MAX_RUN_RESULT_CHECK_DETAIL_LENGTH,
+  MAX_RUN_RESULT_CHECK_ID_LENGTH,
+  MAX_RUN_RESULT_CHECK_LABEL_LENGTH,
+  MAX_RUN_RESULT_CHECKS,
   MAX_RUN_RESULT_CHANGED_FILES,
   MAX_RUN_RESULT_CHANGED_FILE_LENGTH,
   type AgentRunResult,
@@ -6,10 +10,6 @@ import {
   type RunnerMode,
 } from '../../shared/model.js'
 
-const MAX_CHECKS = 16
-const MAX_CHECK_ID_LENGTH = 64
-const MAX_CHECK_LABEL_LENGTH = 120
-const MAX_CHECK_DETAIL_LENGTH = 500
 const UNSAFE_PUBLIC_TEXT = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
 
 export function validateRunnerEvidence(value: unknown, mode: RunnerMode): AgentRunResult {
@@ -61,13 +61,21 @@ export function validateRunnerEvidence(value: unknown, mode: RunnerMode): AgentR
     throw invalidEvidence('simulated evidence cannot claim repository paths')
   }
 
-  if (!Array.isArray(evidence.checks) || evidence.checks.length < 1 || evidence.checks.length > MAX_CHECKS) {
-    throw invalidEvidence('checks must contain 1-16 entries')
+  if (
+    !Array.isArray(evidence.checks) ||
+    evidence.checks.length < 1 ||
+    evidence.checks.length > MAX_RUN_RESULT_CHECKS
+  ) {
+    throw invalidEvidence(`checks must contain 1-${MAX_RUN_RESULT_CHECKS} entries`)
   }
   const checkIds = new Set<string>()
   const checks = evidence.checks.map((candidate, index) => {
     const check = record(candidate, `checks[${index}]`)
-    const id = boundedPublicText(check.id, `checks[${index}].id`, MAX_CHECK_ID_LENGTH)
+    const id = boundedPublicText(
+      check.id,
+      `checks[${index}].id`,
+      MAX_RUN_RESULT_CHECK_ID_LENGTH,
+    )
     if (!/^[a-z][a-z0-9-]*$/.test(id) || checkIds.has(id)) {
       throw invalidEvidence(`checks[${index}].id must be a unique lowercase slug`)
     }
@@ -81,8 +89,16 @@ export function validateRunnerEvidence(value: unknown, mode: RunnerMode): AgentR
     }
     return {
       id,
-      label: boundedPublicText(check.label, `checks[${index}].label`, MAX_CHECK_LABEL_LENGTH),
-      detail: boundedPublicText(check.detail, `checks[${index}].detail`, MAX_CHECK_DETAIL_LENGTH),
+      label: boundedPublicText(
+        check.label,
+        `checks[${index}].label`,
+        MAX_RUN_RESULT_CHECK_LABEL_LENGTH,
+      ),
+      detail: boundedPublicText(
+        check.detail,
+        `checks[${index}].detail`,
+        MAX_RUN_RESULT_CHECK_DETAIL_LENGTH,
+      ),
       status: status as RunCheckStatus,
     }
   })

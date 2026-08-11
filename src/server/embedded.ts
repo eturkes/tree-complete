@@ -6,7 +6,10 @@ import type {
   RunnerMode,
   Workspace,
 } from '../shared/model.js'
+export { TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES } from '../shared/model.js'
 import { createApp } from './app.js'
+import { inspectGitRepository } from './git.js'
+import { readProjectManifestAtCommit } from './manifest.js'
 
 export interface EmbeddedServiceOptions {
   targetRepo: string
@@ -28,6 +31,11 @@ export class EmbeddedServiceError extends Error {
     super(message)
     this.name = 'EmbeddedServiceError'
   }
+}
+
+export async function preflightProjectManifest(targetRepo: string): Promise<void> {
+  const repository = await inspectGitRepository(targetRepo)
+  await readProjectManifestAtCommit(repository.root, repository.commit)
 }
 
 export async function createEmbeddedService(

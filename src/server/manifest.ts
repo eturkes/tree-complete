@@ -5,6 +5,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 
 import type { AlternativeSignal, DesignDecision } from '../shared/model.js'
+import { isolatedGitEnvironment } from './git.js'
 import { execFileChecked } from './process.js'
 
 export const PROJECT_MANIFEST_PATH = '.tree-complete/project.json'
@@ -213,7 +214,7 @@ export async function readProjectManifestAtCommitIfPresent(
       '--',
       PROJECT_MANIFEST_PATH,
     ],
-    { maxCaptureBytes: 512, timeoutMs: 15_000 },
+    { env: isolatedGitEnvironment(), maxCaptureBytes: 512, timeoutMs: 15_000 },
   )
   if (entry.stdout === '') return undefined
   if (entry.stdout !== `${PROJECT_MANIFEST_PATH}\n`) {
@@ -228,10 +229,15 @@ async function resolveManifestCommit(repository: string, commit: string): Promis
   }
 
   const resolvedCommit = (
-    await execFileChecked('git', ['--no-pager', '-C', repository, 'rev-parse', '--verify', `${commit}^{commit}`], {
-      maxCaptureBytes: 256,
-      timeoutMs: 15_000,
-    })
+    await execFileChecked(
+      'git',
+      ['--no-pager', '-C', repository, 'rev-parse', '--verify', `${commit}^{commit}`],
+      {
+        env: isolatedGitEnvironment(),
+        maxCaptureBytes: 256,
+        timeoutMs: 15_000,
+      },
+    )
   ).stdout.trim()
   if (resolvedCommit.toLowerCase() !== commit.toLowerCase()) {
     throw new ProjectManifestError('Manifest commit must be the repository’s full commit ID.')
@@ -255,7 +261,11 @@ async function readProjectManifestObject(
       '--no-textconv',
       `${resolvedCommit}:${PROJECT_MANIFEST_PATH}`,
     ],
-    { maxCaptureBytes: MAX_PROJECT_MANIFEST_BYTES + 1, timeoutMs: 15_000 },
+    {
+      env: isolatedGitEnvironment(),
+      maxCaptureBytes: MAX_PROJECT_MANIFEST_BYTES + 1,
+      timeoutMs: 15_000,
+    },
   )
   assertEncodedSize(result.stdout)
   return parseProjectManifest(result.stdout)

@@ -24,15 +24,15 @@ pnpm start
 
 The production server listens at `http://127.0.0.1:4318` and serves the built client.
 
-`pnpm build` removes only `dist/server`, recompiles it, smoke-imports `createEmbeddedService`, then emits the standalone client and in-progress integration:
+`pnpm build` removes only `dist/server`, recompiles it, smoke-imports the embedded exports, then emits the standalone client and in-progress integration:
 
-- `dist/server/server/embedded.js` exports `createEmbeddedService({ targetRepo, dataDir, mode })`;
+- `dist/server/server/embedded.js` exports `createEmbeddedService({ targetRepo, dataDir, mode })`, `preflightProjectManifest(targetRepo: string): Promise<void>`, and the `TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES` contract;
 - `dist/plugin/in-progress.plugin.json` describes the static `tree-complete` client and allowlists every emitted asset;
 - `dist/plugin/plugin.html` uses only relative asset URLs, so the host can serve it from its own plugin route.
 
-The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisionId, alternativeId })`, and `close()`. It reuses the same validated Fastify routes, store, orchestrator, runner, and public redaction as the standalone server. The in-progress host confirms every `tree-complete.createFork` request before calling the service; the plugin client cannot bypass that host boundary. Preview remains the default mode. The embedded client applies the host theme mode, palette, and fonts; target-less standalone keeps Tree Complete’s light visual identity.
+The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisionId, alternativeId })`, and `close()`. It reuses the same validated Fastify routes, store, orchestrator, runner, and public redaction as the standalone server. `preflightProjectManifest()` canonicalizes the target and strictly parses its manifest from the raw committed `HEAD` without opening a workspace store; service startup independently repeats that authoritative inspection. The in-progress host confirms every `tree-complete.createFork` request before calling the service; the plugin client cannot bypass that host boundary. Preview remains the default mode. The embedded client applies the host theme mode, palette, and fonts; target-less standalone keeps Tree Complete’s light visual identity.
 
-`close()` rejects new calls, drains in-flight API operations, waits for every orchestrated run, then closes Fastify. Shutdown intentionally does not interrupt a valid Codex run; it can therefore take until Codex exits or reaches its runner timeout (30 minutes by default). Timeout handling terminates the managed Codex process group. Once `close()` resolves, Tree Complete has no managed agent invocation left running.
+`close()` rejects new calls, drains in-flight API operations, waits for every orchestrated run, then closes Fastify. Shutdown intentionally does not interrupt a valid Codex run; it can therefore take until Codex exits or reaches its runner timeout (30 minutes by default). Every process settlement kills the detached managed process group, including descendants left after a successful leader exit. Once `close()` resolves, no process remains in that managed group.
 
 ## Create a fork
 
@@ -43,6 +43,8 @@ The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisio
 5. Open **Activity** for the complete run history, fork provenance, result evidence, and full curated timeline.
 
 Refreshing the page preserves the target-less demo in `.tree-complete/workspace.preview.json`. Targeted previews use `.tree-complete/workspace.preview-<digest>.json`, with the digest bound to canonical repository identity, branch, and committed baseline.
+
+Workspace and fork responses share a 4 MiB compact-JSON contract with the in-progress host. Before reserving a fork, Tree Complete projects the largest permitted terminal form of the candidate and every active run (at most two), including bounded logs, result evidence, summary/commit metadata, and the fork-response envelope. Accepted runs therefore cannot make the public response cross that limit later. History remains complete and unpruned below the boundary. A `429 workspace_history_limit_reached` response leaves persisted state byte-for-byte unchanged; keep that history for inspection and select a new empty `TREE_COMPLETE_DATA_DIR` to begin another lineage.
 
 ## Inspect a result
 
@@ -111,11 +113,11 @@ export TREE_COMPLETE_TARGET_REPO=/absolute/path/to/repository
 pnpm dev
 ```
 
-At startup, the service reads the manifest from the target’s exact committed `HEAD`; dirty manifest edits are ignored. For each request it creates a sanitized `tree-complete/...` branch from the selected version’s immutable full commit, records the selected choice in the fork’s manifest, and feeds Codex the structured brief over stdin. The runner invokes the user’s canonical `codex --yolo exec` runtime from that worktree. It inherits the Tree Complete process environment, user configuration, configured GPT model and reasoning effort, and applicable instructions; `--yolo` disables approval and sandbox enforcement. Codex is asked to discover and run checks relevant to its edits. The host independently requires a non-empty implementation diff beyond the manifest, a whitespace-clean patch, the expected worktree/manifest identity, and a clean direct-child commit. Those host checks do not attest that the target project’s tests passed. The source checkout stays untouched. Failed and successful worktrees remain available for local inspection and appear in `git worktree list` from the target repository.
+At startup, the service reads the manifest from the target’s exact committed `HEAD`; dirty manifest edits are ignored, as are local replacement refs, grafts, and shallow-boundary overrides. For each request Tree Complete creates a sanitized `tree-complete/...` branch from the selected version’s immutable full commit, records the selected choice in the dedicated fork worktree’s manifest, and feeds Codex the structured brief over stdin. The runner invokes the user’s canonical `codex --yolo exec` runtime from that worktree. It inherits the Tree Complete process environment, user configuration, configured GPT model and reasoning effort, and applicable instructions; `--yolo` disables approval and sandbox enforcement. Codex is asked to discover and run checks relevant to its edits. The host independently requires a non-empty implementation diff beyond the manifest, a whitespace-clean patch, the expected worktree/manifest identity, and a clean direct-child commit. Those host checks do not attest that the target project’s tests passed. Tree Complete’s own file and Git mutations target the dedicated worktree and branch. Failed and successful worktrees remain available for local inspection and appear in `git worktree list` from the target repository.
 
 A persisted workspace stays pinned to the baseline commit from which it was created. Moving the target repository’s `HEAD` does not silently replace that lineage. Point `TREE_COMPLETE_DATA_DIR` at a new empty directory when you intentionally want a separate workspace rooted at the newer commit.
 
-`--yolo` gives Codex unsandboxed, non-interactive authority as the same operating-system user running Tree Complete. The agent can reach anything that user can reach, not only the generated worktree. Live mode is therefore limited to trusted repositories and trusted instructions. Repository instructions and Git filters are code-execution surfaces; use a separate container or operating-system identity for untrusted input.
+`--yolo` gives Codex unsandboxed, non-interactive authority as the same operating-system user running Tree Complete. The agent can modify the source checkout or anything else that user can reach, not only the generated worktree, and can deliberately escape the managed process group by daemonizing into another session. Live mode is therefore limited to trusted repositories and trusted instructions. Repository instructions and Git filters are code-execution surfaces; use a separate container or operating-system identity for untrusted input and containment guarantees.
 
 Configuration:
 
@@ -155,4 +157,4 @@ The shared TypeScript model is the boundary between UI and service. The server o
 
 The in-progress client maps those public operations to `tree-complete.workspace` and `tree-complete.createFork`. Both transports return the same public `Workspace` and `CreateForkResponse` shapes; host filesystem paths remain redacted.
 
-Only alternatives already defined on the selected decision are accepted. Selecting the current choice, requesting an existing active fork, or referring to a mismatched decision is rejected.
+Only alternatives already defined on the selected decision are accepted. Selecting the current choice, requesting an existing active fork, referring to a mismatched decision, exceeding two active runs, or exhausting the durable public-history budget is rejected before reservation.

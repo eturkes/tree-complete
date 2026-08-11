@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto'
 
 import {
+  ACTIVE_RUN_PHASES,
+  MAX_RUN_LOG_ENTRIES,
+  MAX_RUN_LOG_MESSAGE_LENGTH,
+  MAX_RUN_RESULT_COMMIT_LENGTH,
+  MAX_RUN_RESULT_SUMMARY_LENGTH,
+  MAX_RUN_WORKTREE_PATH_LENGTH,
   isRunActive,
   type AgentRun,
   type CreateForkRequest,
@@ -16,10 +22,15 @@ import { safeSlug } from './git.js'
 import { validateRunnerEvidence } from './runners/evidence.js'
 import type { AgentRunner, RunTransition, RunnerContext } from './runners/types.js'
 import type { WorkspaceStore } from './store.js'
+import {
+  assessForkAdmission,
+  type PublicWorkspaceProjection,
+} from './workspace-budget.js'
 
 export interface ForkOrchestratorOptions {
   store: WorkspaceStore
   runner?: AgentRunner
+  publicWorkspace: PublicWorkspaceProjection
   diagnostic?: (message: string, error?: unknown) => void
   now?: () => Date
 }
@@ -32,6 +43,7 @@ interface ReservedFork {
 export class ForkOrchestrator {
   private readonly store: WorkspaceStore
   private readonly runner?: AgentRunner
+  private readonly publicWorkspace: PublicWorkspaceProjection
   private readonly diagnostic: (message: string, error?: unknown) => void
   private readonly now: () => Date
   private readonly tasks = new Map<string, Promise<void>>()
@@ -39,6 +51,7 @@ export class ForkOrchestrator {
   constructor(options: ForkOrchestratorOptions) {
     this.store = options.store
     this.runner = options.runner
+    this.publicWorkspace = options.publicWorkspace
     this.diagnostic = options.diagnostic ?? (() => undefined)
     this.now = options.now ?? (() => new Date())
   }
@@ -165,6 +178,14 @@ export class ForkOrchestrator {
         },
       ],
     }
+    const admission = assessForkAdmission(workspace, version, run, this.publicWorkspace)
+    if (!admission.accepted) {
+      throw new ApiProblem(
+        429,
+        'workspace_history_limit_reached',
+        'Tree Complete history is full. Keep this workspace for inspection and use a new empty TREE_COMPLETE_DATA_DIR to start another lineage.',
+      )
+    }
     workspace.versions.push(version)
     workspace.runs.push(run)
     return { runId, versionId }
@@ -182,6 +203,16 @@ export class ForkOrchestrator {
       const context = await this.contextFor(runId)
       if (!this.runner) throw new Error('No agent runner is configured')
       const result = await this.runner.run(context)
+      const commit = boundedLifecycleText(
+        result.commit,
+        'Runner commit',
+        MAX_RUN_RESULT_COMMIT_LENGTH,
+      )
+      const summary = boundedLifecycleText(
+        result.summary,
+        'Runner summary',
+        MAX_RUN_RESULT_SUMMARY_LENGTH,
+      )
       const evidence = validateRunnerEvidence(result.evidence, context.run.mode)
       await this.store.update((workspace) => {
         const run = requiredRun(workspace, runId)
@@ -197,16 +228,16 @@ export class ForkOrchestrator {
         const resultDetail = evidence.changeKind === 'simulated'
           ? `a simulated count of ${changedFileCount}`
           : `${changedFileCount}`
-        run.logs.push({
+        appendTerminalLog(run, {
           id: randomUUID(),
           at,
-          message: `${completionLabel} at ${result.commit.slice(0, 12)} with ${resultDetail} affected file${changedFileCount === 1 ? '' : 's'}.`,
+          message: `${completionLabel} at ${commit.slice(0, 12)} with ${resultDetail} affected file${changedFileCount === 1 ? '' : 's'}.`,
           tone: 'success',
         })
         version.status = 'complete'
-        version.commit = result.commit
+        version.commit = commit
         version.changedFiles = changedFileCount
-        version.summary = result.summary
+        version.summary = summary
       })
     } catch (error) {
       const failure = safeFailure(error)
@@ -219,7 +250,7 @@ export class ForkOrchestrator {
         run.progress = Math.min(run.progress, 99)
         run.completedAt = at
         run.error = failure
-        run.logs.push({
+        appendTerminalLog(run, {
           id: randomUUID(),
           at,
           message: failure,
@@ -251,6 +282,7 @@ export class ForkOrchestrator {
       toAlternative,
       transition: async (transition) => await this.transition(runId, transition),
       setWorktree: async (path) => {
+        boundedWorktreePath(path)
         await this.store.update((draft) => {
           requiredRun(draft, runId).worktreePath = path
         })
@@ -260,21 +292,25 @@ export class ForkOrchestrator {
   }
 
   private async transition(runId: string, transition: RunTransition): Promise<void> {
+    const normalized = validatedTransition(transition)
     await this.store.update((workspace) => {
       const run = requiredRun(workspace, runId)
       const version = requiredVersion(workspace, run.versionId)
       if (run.phase === 'complete' || run.phase === 'failed') {
-        throw new Error(`Cannot move terminal run ${run.id} to ${transition.phase}`)
+        throw new Error(`Cannot move terminal run ${run.id} to ${normalized.phase}`)
       }
-      run.phase = transition.phase
-      run.progress = Math.max(run.progress, Math.min(99, transition.progress))
+      if (run.logs.length >= MAX_RUN_LOG_ENTRIES - 1) {
+        throw new Error(`Runner exceeded the ${MAX_RUN_LOG_ENTRIES - 1}-event transition limit`)
+      }
+      run.phase = normalized.phase
+      run.progress = Math.max(run.progress, normalized.progress)
       run.logs.push({
         id: randomUUID(),
         at: this.now().toISOString(),
-        message: transition.message,
-        tone: transition.tone ?? toneFor(transition.phase),
+        message: normalized.message,
+        tone: normalized.tone ?? toneFor(normalized.phase),
       })
-      version.status = transition.phase === 'queued' ? 'queued' : 'working'
+      version.status = normalized.phase === 'queued' ? 'queued' : 'working'
     })
   }
 }
@@ -318,6 +354,72 @@ function toneFor(phase: RunPhase): 'muted' | 'active' | 'success' | 'error' {
 
 function safeFailure(value: unknown): string {
   const error = asError(value)
-  const message = error.message.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 500)
+  const message = Array.from(
+    error.message.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]+/gu, ' ').trim(),
+  )
+    .slice(0, MAX_RUN_LOG_MESSAGE_LENGTH)
+    .join('')
   return message || 'The agent run failed.'
+}
+
+function boundedLifecycleText(value: unknown, field: string, maximum: number): string {
+  if (
+    typeof value !== 'string' ||
+    value.trim().length < 1 ||
+    Array.from(value).length > maximum ||
+    /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(value)
+  ) {
+    throw new Error(`${field} must contain 1-${maximum} safe characters.`)
+  }
+  return value
+}
+
+function boundedWorktreePath(value: unknown): string {
+  if (
+    typeof value !== 'string' ||
+    value.length < 1 ||
+    Array.from(value).length > MAX_RUN_WORKTREE_PATH_LENGTH
+  ) {
+    throw new Error(
+      `Runner worktree path must contain 1-${MAX_RUN_WORKTREE_PATH_LENGTH} characters.`,
+    )
+  }
+  return value
+}
+
+function validatedTransition(transition: RunTransition): RunTransition {
+  if (!ACTIVE_RUN_PHASES.includes(transition.phase)) {
+    throw new Error('Runner transition phase must be active.')
+  }
+  if (
+    !Number.isFinite(transition.progress) ||
+    transition.progress < 0 ||
+    transition.progress > 99
+  ) {
+    throw new Error('Runner transition progress must be between 0 and 99.')
+  }
+  if (
+    transition.tone !== undefined &&
+    transition.tone !== 'muted' &&
+    transition.tone !== 'active' &&
+    transition.tone !== 'success' &&
+    transition.tone !== 'error'
+  ) {
+    throw new Error('Runner transition tone is invalid.')
+  }
+  return {
+    ...transition,
+    message: boundedLifecycleText(
+      transition.message,
+      'Runner transition message',
+      MAX_RUN_LOG_MESSAGE_LENGTH,
+    ),
+  }
+}
+
+function appendTerminalLog(run: AgentRun, entry: AgentRun['logs'][number]): void {
+  if (run.logs.length >= MAX_RUN_LOG_ENTRIES) {
+    throw new Error(`Runner exceeded the ${MAX_RUN_LOG_ENTRIES}-event lifecycle limit`)
+  }
+  run.logs.push(entry)
 }

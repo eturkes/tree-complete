@@ -8,6 +8,9 @@
 - [x] Stabilize graph focus as lineage grows; preserve usable desktop/mobile navigation.
 - [x] Harden keyboard, focus, touch-target, live-status + time freshness behavior.
 - [x] Validate server, client, production build + responsive visual states; document exact guarantees.
+- [x] Bound retained public history by pre-reservation worst-case lifecycle admission; preserve full history below 4 MiB.
+- [x] Isolate raw Git object reads from replace/graft/shallow overrides; preflight exact committed manifests without state writes.
+- [x] Terminate same-group descendants on every captured-process settlement.
 
 ## Next - lifecycle durability
 
@@ -22,5 +25,5 @@
 - Search/jump + root-to-selection highlighting for 25+ version trees.
 - Paginated/archive projections; configurable run/log/version retention.
 - Safe worktree/branch inspection + recoverable cleanup workflow.
-- Adversarial subprocess tests: timeout, history mutation, descendants + hostile Git environment.
+- Adversarial subprocess tests: history mutation, detached-session escape + hostile Git filters/hooks.
 - Automated browser regressions for standalone + in-progress host theme, pointer selection, activity/retry/copy/modal + responsive workflows.

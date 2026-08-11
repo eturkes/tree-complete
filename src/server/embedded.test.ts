@@ -1,11 +1,12 @@
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Workspace } from '../shared/model.js'
 import type { EmbeddedService } from './embedded.js'
-import { createEmbeddedService } from './embedded.js'
+import { createEmbeddedService, preflightProjectManifest } from './embedded.js'
+import { execFileChecked } from './process.js'
 
 const directories: string[] = []
 const services: EmbeddedService[] = []
@@ -28,6 +29,63 @@ async function service(): Promise<{ dataDir: string; embedded: EmbeddedService }
 }
 
 describe('embedded service', () => {
+  it('preflights the exact committed manifest without creating workspace state', async () => {
+    const repository = await mkdtemp(join(tmpdir(), 'tree-complete-preflight-'))
+    directories.push(repository)
+    await git(repository, ['init', '--initial-branch=main'])
+    await mkdir(join(repository, '.tree-complete'))
+    await writeFile(
+      join(repository, '.tree-complete/project.json'),
+      await readFile(resolve(process.cwd(), '.tree-complete/project.json')),
+    )
+    await git(repository, ['add', '--all'])
+    await git(repository, [
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@localhost',
+      'commit',
+      '--message',
+      'valid manifest',
+    ])
+    await writeFile(join(repository, '.tree-complete/project.json'), '{"dirty":true}\n')
+    const before = await repositoryState(repository)
+
+    await expect(preflightProjectManifest(repository)).resolves.toBeUndefined()
+    expect(await repositoryState(repository)).toEqual(before)
+    expect((await readdir(join(repository, '.tree-complete'))).filter((name) =>
+      name.startsWith('workspace.'),
+    )).toEqual([])
+
+    await git(repository, ['add', '--all'])
+    await git(repository, [
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@localhost',
+      'commit',
+      '--message',
+      'invalid manifest',
+    ])
+    await expect(preflightProjectManifest(repository)).rejects.toThrow(
+      /unsupported field|schemaVersion/,
+    )
+
+    await git(repository, ['rm', '--', '.tree-complete/project.json'])
+    await git(repository, [
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@localhost',
+      'commit',
+      '--message',
+      'remove manifest',
+    ])
+    await expect(preflightProjectManifest(repository)).rejects.toThrow(
+      /project\.json|path .* does not exist/i,
+    )
+  })
+
   it('returns the same public workspace and fork response as HTTP injection', async () => {
     const { embedded } = await service()
     const initial = await embedded.workspace()
@@ -105,3 +163,22 @@ describe('embedded service', () => {
     )
   })
 })
+
+async function git(repository: string, args: readonly string[]): Promise<string> {
+  return (
+    await execFileChecked('git', ['-C', repository, ...args], { timeoutMs: 15_000 })
+  ).stdout
+}
+
+async function repositoryState(repository: string): Promise<{
+  head: string
+  refs: string
+  status: string
+}> {
+  const [head, refs, status] = await Promise.all([
+    git(repository, ['rev-parse', '--verify', 'HEAD']),
+    git(repository, ['for-each-ref', '--format=%(refname) %(objectname)']),
+    git(repository, ['status', '--porcelain=v1', '--untracked-files=all']),
+  ])
+  return { head, refs, status }
+}

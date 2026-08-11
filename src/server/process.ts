@@ -72,9 +72,26 @@ export async function spawnCaptured(
     const stdout = new TailBuffer(captureLimit)
     const stderr = new TailBuffer(captureLimit)
     let timedOut = false
+    let settled = false
     let forceKillTimer: NodeJS.Timeout | undefined
-    const timeout = options.timeoutMs
+    let timeout: NodeJS.Timeout | undefined
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout)
+      if (forceKillTimer) clearTimeout(forceKillTimer)
+      // The leader may exit successfully while a same-group descendant closes
+      // its inherited streams and ignores SIGTERM. Settlement owns the whole
+      // detached group, so leave no descendant beyond the returned promise.
+      killProcessTree(child.pid, 'SIGKILL', child.kill.bind(child))
+    }
+    const rejectOnce = (error: Error) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    }
+    timeout = options.timeoutMs
       ? setTimeout(() => {
+          if (settled) return
           timedOut = true
           killProcessTree(child.pid, 'SIGTERM', child.kill.bind(child))
           forceKillTimer = setTimeout(
@@ -88,15 +105,11 @@ export async function spawnCaptured(
 
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk))
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
-    child.once('error', (error) => {
-      if (timeout) clearTimeout(timeout)
-      if (forceKillTimer) clearTimeout(forceKillTimer)
-      reject(asError(error))
-    })
+    child.once('error', (error) => rejectOnce(asError(error)))
     child.once('close', (code, signal) => {
-      if (timeout) clearTimeout(timeout)
-      if (forceKillTimer) clearTimeout(forceKillTimer)
-      killProcessTree(child.pid, 'SIGTERM', () => false)
+      if (settled) return
+      settled = true
+      cleanup()
       const result: ProcessResult = {
         stdout: stdout.text(),
         stderr: stderr.text(),
@@ -119,7 +132,7 @@ export async function spawnCaptured(
     })
 
     child.stdin.on('error', (error) => {
-      if ((error as NodeJS.ErrnoException).code !== 'EPIPE') reject(asError(error))
+      if ((error as NodeJS.ErrnoException).code !== 'EPIPE') rejectOnce(asError(error))
     })
     child.stdin.end(options.input ?? '')
   })

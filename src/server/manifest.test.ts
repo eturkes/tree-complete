@@ -16,6 +16,7 @@ import {
   writeWorktreeManifestSelection,
   type ProjectManifest,
 } from './manifest.js'
+import { inspectGitRepository } from './git.js'
 import { execFileChecked } from './process.js'
 
 const directories: string[] = []
@@ -118,6 +119,27 @@ describe('project manifest Git and worktree I/O', () => {
 
     await expect(readProjectManifestAtCommit(repository, commit)).resolves.toEqual(base)
     await expect(readWorktreeManifest(repository)).resolves.toEqual(dirty)
+  })
+
+  it('reads the raw commit tree when local replacement refs rewrite the advertised HEAD', async () => {
+    const base = fixture()
+    const { repository, commit: rawCommit } = await createRepository(base)
+    const replacement = selectManifestAlternative(base, 'runtime', 'remote')
+    await writeFile(manifestPath(repository), serialize(replacement), 'utf8')
+    await git(repository, ['add', '--', PROJECT_MANIFEST_PATH])
+    await git(repository, ['commit', '--message', 'test: replacement manifest'])
+    const replacementCommit = (
+      await git(repository, ['rev-parse', '--verify', 'HEAD^{commit}'])
+    ).trim()
+    await git(repository, ['reset', '--hard', rawCommit])
+    await git(repository, ['replace', rawCommit, replacementCommit])
+
+    expect(parseProjectManifest(await git(repository, [
+      'show',
+      `${rawCommit}:${PROJECT_MANIFEST_PATH}`,
+    ]))).toEqual(replacement)
+    await expect(readProjectManifestAtCommit(repository, rawCommit)).resolves.toEqual(base)
+    await expect(inspectGitRepository(repository)).resolves.toMatchObject({ commit: rawCommit })
   })
 
   it('writes one host-expected selection atomically and asserts the exact result', async () => {

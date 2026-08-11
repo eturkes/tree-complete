@@ -3,10 +3,19 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { CreateForkResponse, Workspace } from '../shared/model.js'
+import {
+  MAX_RUN_LOG_ENTRIES,
+  MAX_RUN_LOG_MESSAGE_LENGTH,
+  TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES,
+  type AgentRun,
+  type CreateForkResponse,
+  type Workspace,
+} from '../shared/model.js'
 import { createApp } from './app.js'
 import { execFileChecked } from './process.js'
 import type { AgentRunner } from './runners/types.js'
+import { createSeedWorkspace } from './seed.js'
+import { encodedJsonBytes } from './workspace-budget.js'
 
 const directories: string[] = []
 const apps: Awaited<ReturnType<typeof createApp>>[] = []
@@ -404,7 +413,85 @@ describe('HTTP API', () => {
     expect(responses.map((response) => response.statusCode)).toEqual([202, 202, 429])
     expect(responses[2].json()).toMatchObject({ error: 'active_run_limit_reached' })
   })
+
+  it('rejects a near-limit history before reservation without changing persisted state', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'tree-complete-history-limit-'))
+    directories.push(dataDir)
+    const seed = nearLimitWorkspace()
+    const app = await createApp({
+      config: { agentMode: 'preview', dataDir, previewPhaseDelayMs: 1 },
+      seed: () => structuredClone(seed),
+    })
+    apps.push(app)
+
+    const readable = await app.inject({ method: 'GET', url: '/api/workspace' })
+    expect(readable.statusCode).toBe(200)
+    expect(Buffer.byteLength(readable.payload)).toBeLessThan(
+      TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES,
+    )
+    expect(readable.json<Workspace>().runs).toHaveLength(seed.runs.length)
+    const before = await readFile(app.workspaceStore.statePath, 'utf8')
+
+    const rejected = await app.inject({
+      method: 'POST',
+      url: '/api/forks',
+      payload: {
+        baseVersionId: 'root',
+        decisionId: 'data-boundary',
+        alternativeId: 'sqlite',
+      },
+    })
+    expect(rejected.statusCode).toBe(429)
+    expect(rejected.json()).toMatchObject({
+      error: 'workspace_history_limit_reached',
+      detail: expect.stringMatching(/new empty TREE_COMPLETE_DATA_DIR/),
+    })
+    expect(await readFile(app.workspaceStore.statePath, 'utf8')).toBe(before)
+  })
 })
+
+function nearLimitWorkspace(): Workspace {
+  const workspace = createSeedWorkspace({
+    runner: {
+      mode: 'preview',
+      label: 'Preview agent',
+      available: true,
+      detail: 'Runs a short local simulation without changing a repository.',
+    },
+  })
+  const sample = historicalRun(0)
+  const initialBytes = encodedJsonBytes(workspace)
+  workspace.runs.push(sample)
+  const firstRunBytes = encodedJsonBytes(workspace) - initialBytes
+  workspace.runs.push(historicalRun(1))
+  const additionalRunBytes = encodedJsonBytes(workspace) - initialBytes - firstRunBytes
+  workspace.runs.pop()
+  workspace.runs.pop()
+  const targetBytes = TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES - 512
+  const count =
+    1 + Math.floor((targetBytes - initialBytes - firstRunBytes) / additionalRunBytes)
+  workspace.runs.push(...Array.from({ length: count }, (_, index) => historicalRun(index)))
+  return workspace
+}
+
+function historicalRun(index: number): AgentRun {
+  const suffix = index.toString().padStart(4, '0')
+  return {
+    id: `history-${suffix}`,
+    versionId: 'root',
+    mode: 'preview',
+    phase: 'complete',
+    progress: 100,
+    startedAt: '2026-01-01T00:00:00.000Z',
+    completedAt: '2026-01-01T00:00:01.000Z',
+    logs: Array.from({ length: MAX_RUN_LOG_ENTRIES }, (_, logIndex) => ({
+      id: `history-${suffix}-${logIndex}`,
+      at: '2026-01-01T00:00:01.000Z',
+      message: 'x'.repeat(MAX_RUN_LOG_MESSAGE_LENGTH),
+      tone: 'success' as const,
+    })),
+  }
+}
 
 async function git(repository: string, args: readonly string[]): Promise<string> {
   return (

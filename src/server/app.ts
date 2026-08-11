@@ -1,7 +1,7 @@
 import staticPlugin from '@fastify/static'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { access } from 'node:fs/promises'
-import { basename, resolve } from 'node:path'
+import { resolve } from 'node:path'
 
 import type { ApiError, CreateForkRequest, Workspace } from '../shared/model.js'
 import {
@@ -20,6 +20,7 @@ import {
   type ProjectManifest,
 } from './manifest.js'
 import { ForkOrchestrator } from './orchestrator.js'
+import { publicWorkspace } from './public.js'
 import { CodexRunner } from './runners/codex.js'
 import { PreviewRunner } from './runners/preview.js'
 import type { AgentRunner } from './runners/types.js'
@@ -119,6 +120,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const orchestrator = new ForkOrchestrator({
     store,
     runner,
+    publicWorkspace: (workspace) =>
+      publicWorkspace(workspace, [config.targetRepo, config.dataDir]),
     diagnostic: (message, error) => app.log.error({ err: error }, message),
   })
   app.decorate('workspaceStore', store)
@@ -152,13 +155,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     status: descriptor.available ? ('ready' as const) : ('degraded' as const),
     runner: { mode: descriptor.mode, available: descriptor.available },
   }))
-  app.get('/api/workspace', async () => publicWorkspace(await store.snapshot(), config))
+  app.get('/api/workspace', async () =>
+    publicWorkspace(await store.snapshot(), [config.targetRepo, config.dataDir]),
+  )
   app.post('/api/forks', async (request, reply) => {
     const forkRequest = parseForkRequest(request.body)
     const response = await orchestrator.createFork(forkRequest)
     return await reply.code(202).send({
       ...response,
-      workspace: publicWorkspace(response.workspace, config),
+      workspace: publicWorkspace(response.workspace, [config.targetRepo, config.dataDir]),
     })
   })
 
@@ -260,29 +265,6 @@ async function clientExists(): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-function publicWorkspace(workspace: Workspace, config: ServerConfig): Workspace {
-  const copy = structuredClone(workspace)
-  if (copy.project.repository.startsWith('/')) {
-    copy.project.repository = `git:${basename(copy.project.repository)}`
-  }
-  const replacements = [config.targetRepo, config.dataDir].filter(
-    (value): value is string => Boolean(value),
-  )
-  for (const run of copy.runs) {
-    run.worktreePath = undefined
-    if (run.error) run.error = redact(run.error, replacements)
-    for (const entry of run.logs) entry.message = redact(entry.message, replacements)
-  }
-  return copy
-}
-
-function redact(value: string, replacements: readonly string[]): string {
-  return replacements.reduce(
-    (result, path) => result.replaceAll(path, '[local path]'),
-    value,
-  )
 }
 
 function isMutation(method: string): boolean {
