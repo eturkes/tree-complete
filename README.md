@@ -27,8 +27,8 @@ The production server listens at `http://127.0.0.1:4318` and serves the built cl
 `pnpm build` removes only `dist/server`, recompiles it, smoke-imports the embedded exports, then emits the standalone client and in-progress integration:
 
 - `dist/server/server/embedded.js` exports `createEmbeddedService({ targetRepo, dataDir, mode })`, `preflightProjectManifest(targetRepo: string): Promise<void>`, and the `TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES` contract;
-- `dist/plugin/in-progress.plugin.json` describes the static `tree-complete` client and allowlists every emitted asset;
-- `dist/plugin/plugin.html` uses only relative asset URLs, so the host can serve it from its own plugin route.
+- `dist/plugin/in-progress.plugin.json` describes the static `tree-complete` client;
+- `dist/plugin/plugin.html` inlines its code, styles, and fonts so opaque-frame privacy/wallet extensions cannot strand the host handshake by blocking subresources.
 
 The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisionId, alternativeId })`, and `close()`. It reuses the same validated Fastify routes, store, orchestrator, runner, and public redaction as the standalone server. `preflightProjectManifest()` canonicalizes the target and strictly parses its manifest from the raw committed `HEAD` without opening a workspace store; service startup independently repeats that authoritative inspection. The in-progress host confirms every `tree-complete.createFork` request before calling the service; the plugin client cannot bypass that host boundary. Preview remains the default mode. The embedded client applies the host theme mode, palette, and fonts; target-less standalone keeps Tree Complete’s light visual identity.
 

@@ -21,15 +21,14 @@ const emitted = (await files(output)).sort()
 if (!emitted.includes(entry)) throw new Error(`Plugin entry is missing: ${entry}`)
 const assets = emitted.filter((path) => path !== entry && path !== manifestName)
 const html = await readFile(resolve(output, entry), 'utf8')
-const references = [...html.matchAll(/\b(?:href|src)=["']([^"']+)["']/gi)].map((match) => match[1])
-for (const reference of references) {
-  if (!reference.startsWith('./')) {
-    throw new Error(`Plugin entry contains a non-relative asset reference: ${reference}`)
-  }
-  const asset = reference.slice(2).split(/[?#]/, 1)[0]
-  if (!assets.includes(asset)) {
-    throw new Error(`Plugin entry references an asset outside the allowlist: ${reference}`)
-  }
+const markup = html
+  .replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, '$1</script>')
+  .replace(/(<style\b[^>]*>)[\s\S]*?<\/style>/gi, '$1</style>')
+const references = [...markup.matchAll(/\b(?:href|src)=["']([^"']+)["']/gi)].map((match) => match[1])
+if (assets.length > 0 || references.length > 0) {
+  throw new Error(
+    `Plugin entry must be self-contained; emitted ${assets.length} external assets and ${references.length} asset references`,
+  )
 }
 const manifest = {
   apiVersion: '1.0',
