@@ -149,8 +149,12 @@ describe('CodexRunner', () => {
       ],
     })
     expect(result.evidence.changedFiles).toHaveLength(MAX_RUN_RESULT_CHANGED_FILES)
-    expect(result.evidence.changedFiles).toContainEqual(expect.stringMatching(/^00-control�name\.txt \[[0-9a-f]{8}\]$/))
-    expect(result.evidence.changedFiles).toContainEqual(expect.stringMatching(/^01-separator�name\.txt \[[0-9a-f]{8}\]$/))
+    expect(result.evidence.changedFiles).toContainEqual(
+      expect.stringMatching(/^00-control�name\.txt \[[0-9a-f]{8}\]$/),
+    )
+    expect(result.evidence.changedFiles).toContainEqual(
+      expect.stringMatching(/^01-separator�name\.txt \[[0-9a-f]{8}\]$/),
+    )
     expect(result.evidence.changedFiles).toContainEqual(expect.stringMatching(/… \[[0-9a-f]{8}\]$/))
     expect(result.evidence.changedFiles.filter((path) => path.startsWith('02-é.txt'))).toEqual([
       expect.stringMatching(/^02-é\.txt \[[0-9a-f]{8}\]$/),
@@ -193,7 +197,9 @@ describe('CodexRunner', () => {
       `${baseCommit}..${result.commit}`,
       '--',
     ])
-    expect(committedPaths.stdout.split('\0').filter(Boolean)).toHaveLength(result.evidence.changedFileCount)
+    expect(committedPaths.stdout.split('\0').filter(Boolean)).toHaveLength(
+      result.evidence.changedFileCount,
+    )
     expect(validateRunnerEvidence(result.evidence, 'codex')).toEqual(result.evidence)
   })
 })

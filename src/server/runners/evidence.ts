@@ -14,13 +14,15 @@ const UNSAFE_PUBLIC_TEXT = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
 
 export function validateRunnerEvidence(value: unknown, mode: RunnerMode): AgentRunResult {
   const evidence = record(value, 'evidence')
-  const changeKind = evidence.changeKind === 'estimated' && mode === 'preview'
-    ? 'simulated'
-    : evidence.changeKind
+  const changeKind =
+    evidence.changeKind === 'estimated' && mode === 'preview' ? 'simulated' : evidence.changeKind
   if (changeKind !== 'measured' && changeKind !== 'simulated') {
     throw invalidEvidence('changeKind is invalid')
   }
-  if ((mode === 'codex' && changeKind !== 'measured') || (mode === 'preview' && changeKind !== 'simulated')) {
+  if (
+    (mode === 'codex' && changeKind !== 'measured') ||
+    (mode === 'preview' && changeKind !== 'simulated')
+  ) {
     throw invalidEvidence(`changeKind does not match ${mode} mode`)
   }
 
@@ -28,7 +30,10 @@ export function validateRunnerEvidence(value: unknown, mode: RunnerMode): AgentR
   if (!Number.isSafeInteger(changedFileCount) || (changedFileCount as number) < 0) {
     throw invalidEvidence('changedFileCount must be a non-negative safe integer')
   }
-  if (!Array.isArray(evidence.changedFiles) || evidence.changedFiles.length > MAX_RUN_RESULT_CHANGED_FILES) {
+  if (
+    !Array.isArray(evidence.changedFiles) ||
+    evidence.changedFiles.length > MAX_RUN_RESULT_CHANGED_FILES
+  ) {
     throw invalidEvidence('changedFiles exceeds its public bound')
   }
   const changedFiles = evidence.changedFiles.map((path, index) =>
@@ -54,7 +59,10 @@ export function validateRunnerEvidence(value: unknown, mode: RunnerMode): AgentR
   if (typeof evidence.changedFilesTruncated !== 'boolean') {
     throw invalidEvidence('changedFilesTruncated must be boolean')
   }
-  if (changeKind === 'measured' && evidence.changedFilesTruncated !== ((changedFileCount as number) > changedFiles.length)) {
+  if (
+    changeKind === 'measured' &&
+    evidence.changedFilesTruncated !== (changedFileCount as number) > changedFiles.length
+  ) {
     throw invalidEvidence('measured changed-file truncation is inconsistent')
   }
   if (changeKind === 'simulated' && (changedFiles.length > 0 || evidence.changedFilesTruncated)) {
@@ -71,11 +79,7 @@ export function validateRunnerEvidence(value: unknown, mode: RunnerMode): AgentR
   const checkIds = new Set<string>()
   const checks = evidence.checks.map((candidate, index) => {
     const check = record(candidate, `checks[${index}]`)
-    const id = boundedPublicText(
-      check.id,
-      `checks[${index}].id`,
-      MAX_RUN_RESULT_CHECK_ID_LENGTH,
-    )
+    const id = boundedPublicText(check.id, `checks[${index}].id`, MAX_RUN_RESULT_CHECK_ID_LENGTH)
     if (!/^[a-z][a-z0-9-]*$/.test(id) || checkIds.has(id)) {
       throw invalidEvidence(`checks[${index}].id must be a unique lowercase slug`)
     }
@@ -84,7 +88,10 @@ export function validateRunnerEvidence(value: unknown, mode: RunnerMode): AgentR
     if (status !== 'passed' && status !== 'simulated') {
       throw invalidEvidence(`checks[${index}].status is invalid`)
     }
-    if ((mode === 'codex' && status !== 'passed') || (mode === 'preview' && status !== 'simulated')) {
+    if (
+      (mode === 'codex' && status !== 'passed') ||
+      (mode === 'preview' && status !== 'simulated')
+    ) {
       throw invalidEvidence(`checks[${index}].status does not match ${mode} mode`)
     }
     return {

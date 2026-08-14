@@ -100,11 +100,15 @@ export function VersionNode({ data }: NodeProps<VersionFlowNode>) {
             <h2>{version.name}</h2>
             <span className="version-node__branch" title={version.branch}>
               <Icon name={preview ? 'spark' : 'branch'} size={13} />
-              {preview ? 'sim · ' : ''}{version.branch}
+              {preview ? 'sim · ' : ''}
+              {version.branch}
             </span>
           </div>
           {version.changedFiles !== undefined ? (
-            <span className="file-count" title={preview ? 'Illustrative simulation only' : 'Files changed'}>
+            <span
+              className="file-count"
+              title={preview ? 'Illustrative simulation only' : 'Files changed'}
+            >
               <strong>{version.changedFiles}</strong> {preview ? 'simulated' : 'files'}
             </span>
           ) : null}

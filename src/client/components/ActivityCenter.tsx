@@ -81,13 +81,13 @@ function formatRunListTime(value: string): string {
 }
 
 function displayLabel(value: string): string {
-  return value
-    .replace(/[-_]+/g, ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase())
+  return value.replace(/[-_]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
 }
 
 function contextFor(run: AgentRun, versions: readonly ProgramVersion[]): RunContext {
-  const version = versions.find((candidate) => candidate.id === run.versionId || candidate.runId === run.id)
+  const version = versions.find(
+    (candidate) => candidate.id === run.versionId || candidate.runId === run.id,
+  )
   if (!version) return {}
   const parent = version.parentId
     ? versions.find((candidate) => candidate.id === version.parentId)
@@ -97,8 +97,13 @@ function contextFor(run: AgentRun, versions: readonly ProgramVersion[]): RunCont
   const parentDecision = parent?.decisions.find((candidate) => candidate.id === origin.decisionId)
   const versionDecision = version.decisions.find((candidate) => candidate.id === origin.decisionId)
   const decision = versionDecision ?? parentDecision
-  const alternatives = [...(parentDecision?.alternatives ?? []), ...(versionDecision?.alternatives ?? [])]
-  const fromLabel = alternatives.find((candidate) => candidate.id === origin.fromAlternativeId)?.label
+  const alternatives = [
+    ...(parentDecision?.alternatives ?? []),
+    ...(versionDecision?.alternatives ?? []),
+  ]
+  const fromLabel = alternatives.find(
+    (candidate) => candidate.id === origin.fromAlternativeId,
+  )?.label
   const toLabel = alternatives.find((candidate) => candidate.id === origin.toAlternativeId)?.label
   return {
     version,
@@ -138,16 +143,25 @@ function RunListItem({
         onClick={onSelect}
         type="button"
       >
-        <span className={`activity-center__run-status activity-center__run-status--${run.phase}`} aria-hidden="true" />
+        <span
+          className={`activity-center__run-status activity-center__run-status--${run.phase}`}
+          aria-hidden="true"
+        />
         <span className="activity-center__run-copy">
           <strong>{version?.name ?? run.versionId}</strong>
-          <span>{run.mode === 'preview' ? 'Preview' : 'Agent'} · {phaseLabel[run.phase]}</span>
+          <span>
+            {run.mode === 'preview' ? 'Preview' : 'Agent'} · {phaseLabel[run.phase]}
+          </span>
         </span>
-        <time dateTime={run.startedAt} title={formatDate(run.startedAt)}>{formatRunListTime(run.startedAt)}</time>
+        <time dateTime={run.startedAt} title={formatDate(run.startedAt)}>
+          {formatRunListTime(run.startedAt)}
+        </time>
         <span className="activity-center__run-progress" aria-hidden="true">
           <span style={{ width: `${progress}%` }} />
         </span>
-        <span className="activity-center__run-percent">{active ? `${progress}%` : phaseLabel[run.phase]}</span>
+        <span className="activity-center__run-percent">
+          {active ? `${progress}%` : phaseLabel[run.phase]}
+        </span>
       </button>
     </li>
   )
@@ -166,7 +180,11 @@ function CopyField({
     <div className="activity-center__copy-field">
       <span>{label}</span>
       <code title={value}>{value}</code>
-      <button aria-label={`Copy ${label.toLowerCase()}`} onClick={() => onCopy(label, value)} type="button">
+      <button
+        aria-label={`Copy ${label.toLowerCase()}`}
+        onClick={() => onCopy(label, value)}
+        type="button"
+      >
         Copy
       </button>
     </div>
@@ -193,7 +211,11 @@ export function ActivityCenter({
     () =>
       [...runs].sort((left, right) => {
         const activeDelta = Number(isRunActive(right)) - Number(isRunActive(left))
-        return activeDelta || timestamp(right.startedAt) - timestamp(left.startedAt) || right.id.localeCompare(left.id)
+        return (
+          activeDelta ||
+          timestamp(right.startedAt) - timestamp(left.startedAt) ||
+          right.id.localeCompare(left.id)
+        )
       }),
     [runs],
   )
@@ -202,10 +224,13 @@ export function ActivityCenter({
   const selectedResult = selectedRun?.result
   const activeCount = sortedRuns.filter(isRunActive).length
   const progress = selectedRun ? Math.max(0, Math.min(100, Math.round(selectedRun.progress))) : 0
-  const changedFileCount = selectedResult?.changedFileCount ?? selectedContext?.version?.changedFiles
+  const changedFileCount =
+    selectedResult?.changedFileCount ?? selectedContext?.version?.changedFiles
   const changedFilesSimulated =
     selectedResult?.changeKind === 'simulated' ||
-    (!selectedResult && selectedRun?.mode === 'preview' && selectedContext?.version?.changedFiles !== undefined)
+    (!selectedResult &&
+      selectedRun?.mode === 'preview' &&
+      selectedContext?.version?.changedFiles !== undefined)
   const checksTitle = selectedRun?.mode === 'preview' ? 'Simulation check' : 'Host integrity checks'
 
   useInertBackground(true)
@@ -221,9 +246,11 @@ export function ActivityCenter({
       return
     }
     if (event.key !== 'Tab' || !dialog.current) return
-    const focusable = [...dialog.current.querySelectorAll<HTMLElement>(
-      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-    )].filter((element) => element.getClientRects().length > 0)
+    const focusable = [
+      ...dialog.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ),
+    ].filter((element) => element.getClientRects().length > 0)
     if (!focusable.length) {
       event.preventDefault()
       title.current?.focus()
@@ -231,7 +258,10 @@ export function ActivityCenter({
     }
     const first = focusable[0]
     const last = focusable[focusable.length - 1]
-    if (event.shiftKey && (document.activeElement === first || document.activeElement === title.current)) {
+    if (
+      event.shiftKey &&
+      (document.activeElement === first || document.activeElement === title.current)
+    ) {
       event.preventDefault()
       last.focus()
     } else if (!event.shiftKey && document.activeElement === last) {
@@ -253,10 +283,14 @@ export function ActivityCenter({
       >
         <div className="activity-center__chrome">
           <header className="activity-center__header">
-            <span className="activity-center__header-icon"><Icon name="activity" size={21} /></span>
+            <span className="activity-center__header-icon">
+              <Icon name="activity" size={21} />
+            </span>
             <div>
               <p>Workspace activity</p>
-              <h2 id="activity-center-title" ref={title} tabIndex={-1}>Activity center</h2>
+              <h2 id="activity-center-title" ref={title} tabIndex={-1}>
+                Activity center
+              </h2>
               <span className="activity-center__summary" id="activity-center-summary">
                 {activeCount
                   ? `${activeCount} active ${activeCount === 1 ? 'run' : 'runs'} with ${runner.label}`
@@ -269,10 +303,17 @@ export function ActivityCenter({
               role="status"
               title={`${runner.label}: ${runner.available ? 'available' : 'unavailable'}`}
             >
-              <span aria-hidden="true"><Icon name={runner.available ? 'check' : 'warning'} size={12} /></span>
+              <span aria-hidden="true">
+                <Icon name={runner.available ? 'check' : 'warning'} size={12} />
+              </span>
               {runner.available ? 'Runner available' : 'Runner unavailable'}
             </span>
-            <button className="activity-center__close" onClick={onClose} type="button" aria-label="Close activity center">
+            <button
+              className="activity-center__close"
+              onClick={onClose}
+              type="button"
+              aria-label="Close activity center"
+            >
               <Icon name="close" size={20} />
             </button>
           </header>
@@ -303,14 +344,23 @@ export function ActivityCenter({
               </ul>
             </nav>
 
-            <article aria-labelledby="activity-center-detail-title" className="activity-center__detail" id="activity-center-detail">
+            <article
+              aria-labelledby="activity-center-detail-title"
+              className="activity-center__detail"
+              id="activity-center-detail"
+            >
               <div className="activity-center__detail-header">
                 <div>
-                  <span className={`activity-center__phase activity-center__phase--${selectedRun.phase}`}>
+                  <span
+                    className={`activity-center__phase activity-center__phase--${selectedRun.phase}`}
+                  >
                     {isRunActive(selectedRun) ? <span aria-hidden="true" /> : null}
-                    {selectedRun.mode === 'preview' ? 'Preview' : 'Agent'} · {phaseLabel[selectedRun.phase]}
+                    {selectedRun.mode === 'preview' ? 'Preview' : 'Agent'} ·{' '}
+                    {phaseLabel[selectedRun.phase]}
                   </span>
-                  <h3 id="activity-center-detail-title">{selectedContext?.version?.name ?? selectedRun.versionId}</h3>
+                  <h3 id="activity-center-detail-title">
+                    {selectedContext?.version?.name ?? selectedRun.versionId}
+                  </h3>
                   <p>{selectedContext?.version?.summary ?? `Activity for run ${selectedRun.id}`}</p>
                 </div>
                 <div className="activity-center__progress-value">
@@ -333,28 +383,48 @@ export function ActivityCenter({
               </div>
 
               <dl className="activity-center__metadata">
-                <div><dt>Started</dt><dd>{formatDate(selectedRun.startedAt)}</dd></div>
-                <div><dt>Finished</dt><dd>{formatDate(selectedRun.completedAt)}</dd></div>
-                <div><dt>Mode</dt><dd>{selectedRun.mode === 'preview' ? 'Preview simulation' : runner.label}</dd></div>
+                <div>
+                  <dt>Started</dt>
+                  <dd>{formatDate(selectedRun.startedAt)}</dd>
+                </div>
+                <div>
+                  <dt>Finished</dt>
+                  <dd>{formatDate(selectedRun.completedAt)}</dd>
+                </div>
+                <div>
+                  <dt>Mode</dt>
+                  <dd>{selectedRun.mode === 'preview' ? 'Preview simulation' : runner.label}</dd>
+                </div>
               </dl>
 
               {selectedContext?.decisionTitle ? (
-                <section className="activity-center__provenance" aria-labelledby="activity-center-provenance-title">
+                <section
+                  className="activity-center__provenance"
+                  aria-labelledby="activity-center-provenance-title"
+                >
                   <div>
                     <p>Fork provenance</p>
                     <h4 id="activity-center-provenance-title">{selectedContext.decisionTitle}</h4>
                   </div>
                   <div className="activity-center__choice-change">
-                    <span><small>From</small><strong>{selectedContext.fromLabel}</strong></span>
+                    <span>
+                      <small>From</small>
+                      <strong>{selectedContext.fromLabel}</strong>
+                    </span>
                     <Icon name="arrow" size={18} />
-                    <span><small>To</small><strong>{selectedContext.toLabel}</strong></span>
+                    <span>
+                      <small>To</small>
+                      <strong>{selectedContext.toLabel}</strong>
+                    </span>
                   </div>
                   {selectedContext.version?.forkOrigin ? (
                     <button
-                      onClick={() => onInspectDecision(
-                        selectedContext.version!.id,
-                        selectedContext.version!.forkOrigin!.decisionId,
-                      )}
+                      onClick={() =>
+                        onInspectDecision(
+                          selectedContext.version!.id,
+                          selectedContext.version!.forkOrigin!.decisionId,
+                        )
+                      }
                       type="button"
                     >
                       Inspect decision <Icon name="chevron" size={16} />
@@ -364,8 +434,13 @@ export function ActivityCenter({
               ) : null}
 
               {selectedRun.error ? (
-                <section className="activity-center__failure" aria-labelledby="activity-center-failure-title">
-                  <span aria-hidden="true"><Icon name="warning" size={19} /></span>
+                <section
+                  className="activity-center__failure"
+                  aria-labelledby="activity-center-failure-title"
+                >
+                  <span aria-hidden="true">
+                    <Icon name="warning" size={19} />
+                  </span>
                   <div>
                     <h4 id="activity-center-failure-title">Run needs attention</h4>
                     <p>{selectedRun.error}</p>
@@ -374,28 +449,46 @@ export function ActivityCenter({
               ) : null}
 
               <div className="activity-center__results-grid">
-                <section aria-labelledby="activity-center-changes-title" className="activity-center__result-card">
+                <section
+                  aria-labelledby="activity-center-changes-title"
+                  className="activity-center__result-card"
+                >
                   <div className="activity-center__section-heading">
                     <h4 id="activity-center-changes-title">Changes</h4>
-                    {selectedResult?.changeKind ? <span>{selectedResult.changeKind === 'simulated' ? 'Simulation' : 'Measured'}</span> : null}
+                    {selectedResult?.changeKind ? (
+                      <span>
+                        {selectedResult.changeKind === 'simulated' ? 'Simulation' : 'Measured'}
+                      </span>
+                    ) : null}
                   </div>
                   {changedFileCount !== undefined ? (
                     <p className="activity-center__file-count">
                       <strong>{changedFileCount}</strong>
-                      <span>{changedFilesSimulated ? 'illustrative affected files' : 'changed files'}</span>
+                      <span>
+                        {changedFilesSimulated ? 'illustrative affected files' : 'changed files'}
+                      </span>
                     </p>
                   ) : (
                     <p className="activity-center__muted">No file summary reported yet.</p>
                   )}
                   {selectedResult?.changedFiles.length ? (
                     <ul className="activity-center__files">
-                      {selectedResult.changedFiles.map((file) => <li key={file}><code title={file}>{file}</code></li>)}
-                      {selectedResult.changedFilesTruncated ? <li>Additional files omitted from this summary.</li> : null}
+                      {selectedResult.changedFiles.map((file) => (
+                        <li key={file}>
+                          <code title={file}>{file}</code>
+                        </li>
+                      ))}
+                      {selectedResult.changedFilesTruncated ? (
+                        <li>Additional files omitted from this summary.</li>
+                      ) : null}
                     </ul>
                   ) : null}
                 </section>
 
-                <section aria-labelledby="activity-center-checks-title" className="activity-center__result-card">
+                <section
+                  aria-labelledby="activity-center-checks-title"
+                  className="activity-center__result-card"
+                >
                   <div className="activity-center__section-heading">
                     <h4 id="activity-center-checks-title">{checksTitle}</h4>
                     <span>{selectedResult?.checks.length ?? 0}</span>
@@ -404,10 +497,15 @@ export function ActivityCenter({
                     <ul className="activity-center__checks">
                       {selectedResult.checks.map((check) => (
                         <li key={check.id}>
-                          <span className={`activity-center__check-icon activity-center__check-icon--${check.status}`}>
+                          <span
+                            className={`activity-center__check-icon activity-center__check-icon--${check.status}`}
+                          >
                             <Icon name={check.status === 'passed' ? 'check' : 'spark'} size={15} />
                           </span>
-                          <span><strong>{check.label}</strong><small title={check.detail}>{check.detail}</small></span>
+                          <span>
+                            <strong>{check.label}</strong>
+                            <small title={check.detail}>{check.detail}</small>
+                          </span>
                           <em>{displayLabel(check.status)}</em>
                         </li>
                       ))}
@@ -418,37 +516,59 @@ export function ActivityCenter({
                 </section>
               </div>
 
-              <section aria-labelledby="activity-center-timeline-title" className="activity-center__timeline">
+              <section
+                aria-labelledby="activity-center-timeline-title"
+                className="activity-center__timeline"
+              >
                 <div className="activity-center__section-heading">
                   <h4 id="activity-center-timeline-title">Timeline</h4>
-                  <span>{selectedRun.logs.length} {selectedRun.logs.length === 1 ? 'event' : 'events'}</span>
+                  <span>
+                    {selectedRun.logs.length} {selectedRun.logs.length === 1 ? 'event' : 'events'}
+                  </span>
                 </div>
                 {selectedRun.logs.length ? (
                   <ol>
                     {selectedRun.logs.map((entry) => (
-                      <li className={`activity-center__log activity-center__log--${entry.tone}`} key={entry.id}>
+                      <li
+                        className={`activity-center__log activity-center__log--${entry.tone}`}
+                        key={entry.id}
+                      >
                         <span aria-hidden="true" />
                         <time dateTime={entry.at}>{formatLogTime(entry.at)}</time>
                         <p>{entry.message}</p>
                       </li>
                     ))}
                   </ol>
-                ) : <p className="activity-center__muted">The run has not reported any events.</p>}
+                ) : (
+                  <p className="activity-center__muted">The run has not reported any events.</p>
+                )}
               </section>
 
               {selectedContext?.version ? (
                 <section aria-label="Version details" className="activity-center__technical">
                   <CopyField
-                    label={selectedRun.mode === 'preview'
-                      ? selectedRun.phase === 'complete' ? 'Simulated branch' : 'Reserved simulated branch'
-                      : selectedRun.phase === 'complete' ? 'Branch' : 'Reserved branch'}
+                    label={
+                      selectedRun.mode === 'preview'
+                        ? selectedRun.phase === 'complete'
+                          ? 'Simulated branch'
+                          : 'Reserved simulated branch'
+                        : selectedRun.phase === 'complete'
+                          ? 'Branch'
+                          : 'Reserved branch'
+                    }
                     onCopy={onCopy}
                     value={selectedContext.version.branch}
                   />
                   <CopyField
-                    label={selectedRun.mode === 'preview'
-                      ? selectedRun.phase === 'complete' ? 'Result ID' : 'Base ID'
-                      : selectedRun.phase === 'complete' ? 'Result commit' : 'Base commit'}
+                    label={
+                      selectedRun.mode === 'preview'
+                        ? selectedRun.phase === 'complete'
+                          ? 'Result ID'
+                          : 'Base ID'
+                        : selectedRun.phase === 'complete'
+                          ? 'Result commit'
+                          : 'Base commit'
+                    }
                     onCopy={onCopy}
                     value={selectedContext.version.commit}
                   />
@@ -457,14 +577,26 @@ export function ActivityCenter({
 
               {selectedRun.phase === 'failed' && selectedContext?.retryRequest ? (
                 <div className="activity-center__actions">
-                  <p>{runner.available ? 'Retry this exact decision from its original parent.' : runner.detail}</p>
+                  <p>
+                    {runner.available
+                      ? 'Retry this exact decision from its original parent.'
+                      : runner.detail}
+                  </p>
                   <button
                     disabled={starting || !runner.available}
                     onClick={() => onRetry(selectedContext.retryRequest!)}
                     type="button"
                   >
-                    <Icon className={starting ? 'activity-center__spin' : ''} name="refresh" size={18} />
-                    {starting ? 'Starting retry…' : runner.mode === 'preview' ? 'Retry preview' : 'Retry fork'}
+                    <Icon
+                      className={starting ? 'activity-center__spin' : ''}
+                      name="refresh"
+                      size={18}
+                    />
+                    {starting
+                      ? 'Starting retry…'
+                      : runner.mode === 'preview'
+                        ? 'Retry preview'
+                        : 'Retry fork'}
                   </button>
                 </div>
               ) : null}
@@ -472,9 +604,14 @@ export function ActivityCenter({
           </div>
         ) : (
           <div className="activity-center__empty">
-            <span aria-hidden="true"><Icon name="activity" size={25} /></span>
+            <span aria-hidden="true">
+              <Icon name="activity" size={25} />
+            </span>
             <h3>No activity yet</h3>
-            <p>Generated forks and previews will appear here with their progress, checks, and results.</p>
+            <p>
+              Generated forks and previews will appear here with their progress, checks, and
+              results.
+            </p>
           </div>
         )}
       </section>

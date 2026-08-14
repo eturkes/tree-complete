@@ -1,5 +1,3 @@
-import type { LightMyRequestResponse } from 'fastify'
-
 import type {
   CreateForkRequest,
   CreateForkResponse,
@@ -7,9 +5,10 @@ import type {
   Workspace,
 } from '../shared/model.js'
 export { TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES } from '../shared/model.js'
-import { createApp } from './app.js'
+import { ApiProblem } from './errors.js'
 import { inspectGitRepository } from './git.js'
 import { readProjectManifestAtCommit } from './manifest.js'
+import { createTreeCompleteService } from './service.js'
 
 export interface EmbeddedServiceOptions {
   targetRepo: string
@@ -41,87 +40,39 @@ export async function preflightProjectManifest(targetRepo: string): Promise<void
 export async function createEmbeddedService(
   options: EmbeddedServiceOptions,
 ): Promise<EmbeddedService> {
-  const app = await createApp({
+  const service = await createTreeCompleteService({
     config: {
       agentMode: options.mode ?? 'preview',
       targetRepo: options.targetRepo,
       dataDir: options.dataDir,
     },
-    serveClient: false,
   })
-  let closed = false
-  let closing: Promise<void> | undefined
-  const operations = new Set<Promise<unknown>>()
-
-  const assertOpen = () => {
-    if (closed) throw new EmbeddedServiceError(503, 'Tree Complete service is closed.')
-  }
-  const track = <T>(operation: () => Promise<T>): Promise<T> => {
-    assertOpen()
-    const pending = operation()
-    operations.add(pending)
-    void pending.then(
-      () => operations.delete(pending),
-      () => operations.delete(pending),
-    )
-    return pending
-  }
 
   return {
     async workspace(): Promise<Workspace> {
-      return await track(async () =>
-        await responseBody<Workspace>(
-          await app.inject({
-            method: 'GET',
-            url: '/api/workspace',
-            headers: { host: '127.0.0.1' },
-          }),
-        ),
-      )
+      return await translate(async () => await service.workspace())
     },
 
     async createFork(request: CreateForkRequest): Promise<CreateForkResponse> {
-      return await track(async () =>
-        await responseBody<CreateForkResponse>(
-          await app.inject({
-            method: 'POST',
-            url: '/api/forks',
-            headers: { host: '127.0.0.1' },
-            payload: request,
-          }),
-        ),
-      )
+      return await translate(async () => await service.createFork(request))
     },
 
     close(): Promise<void> {
-      if (closing) return closing
-      closed = true
-      closing = (async () => {
-        await Promise.allSettled([...operations])
-        await app.forkOrchestrator.waitForIdle()
-        await app.close()
-      })()
-      return closing
+      return service.close()
     },
   }
 }
 
-async function responseBody<T>(response: LightMyRequestResponse): Promise<T> {
-  let payload: unknown
+async function translate<T>(operation: () => Promise<T>): Promise<T> {
   try {
-    payload = response.json<unknown>()
-  } catch {
-    throw new EmbeddedServiceError(502, 'Tree Complete returned an invalid response.')
+    return await operation()
+  } catch (error) {
+    if (error instanceof ApiProblem) {
+      throw new EmbeddedServiceError(error.statusCode, error.detail ?? error.code)
+    }
+    if (error instanceof Error && error.message === 'Tree Complete service is closed.') {
+      throw new EmbeddedServiceError(503, error.message)
+    }
+    throw error
   }
-  if (response.statusCode >= 400) {
-    const detail =
-      payload &&
-      typeof payload === 'object' &&
-      !Array.isArray(payload) &&
-      typeof (payload as Record<string, unknown>).detail === 'string'
-        ? (payload as Record<string, string>).detail
-        : 'Tree Complete could not complete the request.'
-    throw new EmbeddedServiceError(response.statusCode, detail)
-  }
-  return payload as T
 }

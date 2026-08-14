@@ -4,7 +4,7 @@ Tree Complete turns architectural intent into an explorable program lineage. Rea
 
 ## Run it
 
-Requirements: Node 20.19+ and pnpm. Live Codex mode also requires Git and an installed, authenticated `codex` executable on `PATH`.
+Requirements: Node 24+ and pnpm 11. Live Codex mode also requires Git and an installed, authenticated `codex` executable on `PATH`.
 
 ```sh
 pnpm install
@@ -30,9 +30,9 @@ The production server listens at `http://127.0.0.1:4318` and serves the built cl
 - `dist/plugin/in-progress.plugin.json` describes the static `tree-complete` client;
 - `dist/plugin/plugin.html` inlines its code, styles, and fonts so opaque-frame privacy/wallet extensions cannot strand the host handshake by blocking subresources.
 
-The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisionId, alternativeId })`, and `close()`. It reuses the same validated Fastify routes, store, orchestrator, runner, and public redaction as the standalone server. `preflightProjectManifest()` canonicalizes the target and strictly parses its manifest from the raw committed `HEAD` without opening a workspace store; service startup independently repeats that authoritative inspection. The in-progress host confirms every `tree-complete.createFork` request before calling the service; the plugin client cannot bypass that host boundary. Preview remains the default mode. The embedded client applies the host theme mode, palette, and fonts; target-less standalone keeps Tree Complete’s light visual identity.
+The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisionId, alternativeId })`, and `close()`. It calls the typed application service directly. The standalone Fastify server is a separate transport adapter over that service. Both adapters share the store, orchestrator, runner, validation, and public redaction. `preflightProjectManifest()` canonicalizes the target and strictly parses its manifest from the raw committed `HEAD` without opening a workspace store; service startup independently repeats that authoritative inspection. The in-progress host confirms every `tree-complete.createFork` request before calling the service; the plugin client cannot bypass that host boundary. Preview remains the default mode. The embedded client applies the host theme mode, palette, and fonts; target-less standalone keeps Tree Complete’s light visual identity.
 
-`close()` rejects new calls, drains in-flight API operations, waits for every orchestrated run, then closes Fastify. Shutdown intentionally does not interrupt a valid Codex run; it can therefore take until Codex exits or reaches its runner timeout (30 minutes by default). Every process settlement kills the detached managed process group, including descendants left after a successful leader exit. Once `close()` resolves, no process remains in that managed group.
+`close()` rejects new calls, drains in-flight service operations, and waits for every orchestrated run. Fastify invokes the same closure from its shutdown hook. Shutdown intentionally does not interrupt a valid Codex run; it can therefore take until Codex exits or reaches its runner timeout (30 minutes by default). Every process settlement kills the detached managed process group, including descendants left after a successful leader exit. Once `close()` resolves, no process remains in that managed group.
 
 ## Create a fork
 
@@ -70,36 +70,41 @@ First describe the target program’s forkable decisions in a tracked `.tree-com
     "name": "My program",
     "description": "What this program does."
   },
-  "decisions": [{
-    "id": "storage",
-    "title": "Storage boundary",
-    "question": "Where should canonical state live?",
-    "rationale": "This choice controls recovery and collaboration.",
-    "chosenAlternativeId": "local-json",
-    "alternatives": [{
-      "id": "local-json",
-      "label": "Local JSON",
-      "description": "Keep state beside the process.",
-      "impact": "Simple operation with one writer.",
-      "signal": "recommended",
-      "brief": {
-        "objective": "Keep state local and inspectable.",
-        "constraints": ["Preserve the public API."],
-        "acceptance": ["Writes remain atomic."]
-      }
-    }, {
-      "id": "sqlite",
-      "label": "Embedded SQLite",
-      "description": "Use a transactional embedded database.",
-      "impact": "Richer queries with a binary dependency.",
-      "signal": "balanced",
-      "brief": {
-        "objective": "Move canonical state into SQLite.",
-        "constraints": ["Keep deployment single-process."],
-        "acceptance": ["Existing state survives migration."]
-      }
-    }]
-  }]
+  "decisions": [
+    {
+      "id": "storage",
+      "title": "Storage boundary",
+      "question": "Where should canonical state live?",
+      "rationale": "This choice controls recovery and collaboration.",
+      "chosenAlternativeId": "local-json",
+      "alternatives": [
+        {
+          "id": "local-json",
+          "label": "Local JSON",
+          "description": "Keep state beside the process.",
+          "impact": "Simple operation with one writer.",
+          "signal": "recommended",
+          "brief": {
+            "objective": "Keep state local and inspectable.",
+            "constraints": ["Preserve the public API."],
+            "acceptance": ["Writes remain atomic."]
+          }
+        },
+        {
+          "id": "sqlite",
+          "label": "Embedded SQLite",
+          "description": "Use a transactional embedded database.",
+          "impact": "Richer queries with a binary dependency.",
+          "signal": "balanced",
+          "brief": {
+            "objective": "Move canonical state into SQLite.",
+            "constraints": ["Keep deployment single-process."],
+            "acceptance": ["Existing state survives migration."]
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -121,13 +126,13 @@ A persisted workspace stays pinned to the baseline commit from which it was crea
 
 Configuration:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `TREE_COMPLETE_AGENT_MODE` | `preview` | `preview` or `codex` |
-| `TREE_COMPLETE_TARGET_REPO` | - | Optional read-only preview target; trusted repository with a committed manifest required for `codex` |
-| `TREE_COMPLETE_DATA_DIR` | `.tree-complete` | State and generated worktree directory |
-| `TREE_COMPLETE_HOST` | `127.0.0.1` | Loopback API bind host: `127.0.0.1`, `::1`, or `localhost` |
-| `TREE_COMPLETE_PORT` | `4318` | API and production client port |
+| Variable                    | Default          | Purpose                                                                                              |
+| --------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| `TREE_COMPLETE_AGENT_MODE`  | `preview`        | `preview` or `codex`                                                                                 |
+| `TREE_COMPLETE_TARGET_REPO` | -                | Optional read-only preview target; trusted repository with a committed manifest required for `codex` |
+| `TREE_COMPLETE_DATA_DIR`    | `.tree-complete` | State and generated worktree directory                                                               |
+| `TREE_COMPLETE_HOST`        | `127.0.0.1`      | Loopback API bind host: `127.0.0.1`, `::1`, or `localhost`                                           |
+| `TREE_COMPLETE_PORT`        | `4318`           | API and production client port                                                                       |
 
 Environment variables are intentionally server-only. API callers cannot select a repository, command, worktree path, or raw agent prompt. Host and Origin checks keep the unauthenticated API local. Public workspace responses omit absolute host/worktree paths; successful Codex evidence may include at most 40 bounded repository-relative changed-file labels.
 
@@ -139,12 +144,13 @@ React Flow canvas
        ├─ design decision → alternatives → fork request
        └─ child versions
               ↓
-Fastify API → validated commit manifest → atomic JSON store → fork orchestrator
-                                ├─ preview runner
-                                └─ Git worktree → Codex runner
+Fastify adapter ─┐
+                ├─ typed application service → validated commit manifest
+embedded adapter┘                           └─ atomic JSON store → fork orchestrator
+                                                                      ├─ preview runner
+                                                                      └─ Git worktree → Codex runner
 
-in-progress host → MessagePort API 1.0 → static React client
-                 └─ embedded service → the same Fastify/orchestrator stack
+in-progress host → MessagePort API 1.0 → static React client → embedded adapter
 ```
 
 The shared TypeScript model is the boundary between UI and service. The server owns request validation, branch naming, persistence, and agent execution; the client owns selection and visualization only.

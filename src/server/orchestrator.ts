@@ -22,10 +22,7 @@ import { safeSlug } from './git.js'
 import { validateRunnerEvidence } from './runners/evidence.js'
 import type { AgentRunner, RunTransition, RunnerContext } from './runners/types.js'
 import type { WorkspaceStore } from './store.js'
-import {
-  assessForkAdmission,
-  type PublicWorkspaceProjection,
-} from './workspace-budget.js'
+import { assessForkAdmission, type PublicWorkspaceProjection } from './workspace-budget.js'
 
 export interface ForkOrchestratorOptions {
   store: WorkspaceStore
@@ -65,7 +62,7 @@ export class ForkOrchestrator {
 
   async waitForIdle(): Promise<void> {
     while (this.tasks.size > 0) {
-      await Promise.allSettled([...this.tasks.values()])
+      await Promise.allSettled(this.tasks.values())
     }
   }
 
@@ -76,7 +73,11 @@ export class ForkOrchestrator {
 
     const base = workspace.versions.find((version) => version.id === request.baseVersionId)
     if (!base) {
-      throw new ApiProblem(404, 'base_version_not_found', 'The selected base version does not exist.')
+      throw new ApiProblem(
+        404,
+        'base_version_not_found',
+        'The selected base version does not exist.',
+      )
     }
     if (base.status !== 'ready' && base.status !== 'complete') {
       throw new ApiProblem(
@@ -193,7 +194,9 @@ export class ForkOrchestrator {
 
   private schedule(runId: string): void {
     const task = this.execute(runId)
-      .catch((error) => this.diagnostic(`Unrecoverable orchestration error for run ${runId}`, error))
+      .catch((error) =>
+        this.diagnostic(`Unrecoverable orchestration error for run ${runId}`, error),
+      )
       .finally(() => this.tasks.delete(runId))
     this.tasks.set(runId, task)
   }
@@ -225,9 +228,10 @@ export class ForkOrchestrator {
         run.result = evidence
         const completionLabel = run.mode === 'preview' ? 'Preview complete' : 'Fork complete'
         const changedFileCount = evidence.changedFileCount
-        const resultDetail = evidence.changeKind === 'simulated'
-          ? `a simulated count of ${changedFileCount}`
-          : `${changedFileCount}`
+        const resultDetail =
+          evidence.changeKind === 'simulated'
+            ? `a simulated count of ${changedFileCount}`
+            : `${changedFileCount}`
         appendTerminalLog(run, {
           id: randomUUID(),
           at,
@@ -333,10 +337,7 @@ function requiredDecision(version: ProgramVersion, id: string): DesignDecision {
   return decision
 }
 
-function requiredAlternative(
-  decision: DesignDecision,
-  id: string,
-): DecisionAlternative {
+function requiredAlternative(decision: DesignDecision, id: string): DecisionAlternative {
   const alternative = decision.alternatives.find((candidate) => candidate.id === id)
   if (!alternative) throw new Error(`Alternative ${id} is missing`)
   return alternative

@@ -12,7 +12,7 @@ export function publicWorkspace(
   }
   const replacements = privatePaths.filter((value): value is string => Boolean(value))
   for (const run of copy.runs) {
-    run.worktreePath = undefined
+    delete run.worktreePath
     if (run.error) run.error = redact(run.error, replacements)
     for (const entry of run.logs) entry.message = redact(entry.message, replacements)
   }
@@ -20,10 +20,7 @@ export function publicWorkspace(
 }
 
 function redact(value: string, replacements: readonly string[]): string {
-  return replacements.reduce(
-    (result, path) => result.replaceAll(path, redactionLabel(path)),
-    value,
-  )
+  return replacements.reduce((result, path) => result.replaceAll(path, redactionLabel(path)), value)
 }
 
 function redactionLabel(path: string): string {

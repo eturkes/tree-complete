@@ -31,9 +31,7 @@ function parseMode(value: string | undefined): RunnerMode {
 function parseHost(value: string | undefined): string {
   const host = value ?? '127.0.0.1'
   if (host !== '127.0.0.1' && host !== '::1' && host !== 'localhost') {
-    throw new Error(
-      'TREE_COMPLETE_HOST must be a loopback host (127.0.0.1, ::1, or localhost)',
-    )
+    throw new Error('TREE_COMPLETE_HOST must be a loopback host (127.0.0.1, ::1, or localhost)')
   }
   return host
 }

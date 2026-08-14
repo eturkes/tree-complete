@@ -53,9 +53,11 @@ describe('embedded service', () => {
 
     await expect(preflightProjectManifest(repository)).resolves.toBeUndefined()
     expect(await repositoryState(repository)).toEqual(before)
-    expect((await readdir(join(repository, '.tree-complete'))).filter((name) =>
-      name.startsWith('workspace.'),
-    )).toEqual([])
+    expect(
+      (await readdir(join(repository, '.tree-complete'))).filter((name) =>
+        name.startsWith('workspace.'),
+      ),
+    ).toEqual([])
 
     await git(repository, ['add', '--all'])
     await git(repository, [
@@ -165,9 +167,7 @@ describe('embedded service', () => {
 })
 
 async function git(repository: string, args: readonly string[]): Promise<string> {
-  return (
-    await execFileChecked('git', ['-C', repository, ...args], { timeoutMs: 15_000 })
-  ).stdout
+  return (await execFileChecked('git', ['-C', repository, ...args], { timeoutMs: 15_000 })).stdout
 }
 
 async function repositoryState(repository: string): Promise<{

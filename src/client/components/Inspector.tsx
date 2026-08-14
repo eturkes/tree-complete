@@ -87,19 +87,32 @@ export function Inspector({
         <div className="inspector-welcome__graphic" aria-hidden="true">
           <div className="orbit orbit--one" />
           <div className="orbit orbit--two" />
-          <span><Icon name="branch" size={26} /></span>
+          <span>
+            <Icon name="branch" size={26} />
+          </span>
         </div>
         <p className="section-kicker">Decision lab</p>
-        <h2>{preview ? 'Explore every branch before writing a line.' : 'Every choice is a branch waiting to happen.'}</h2>
+        <h2>
+          {preview
+            ? 'Explore every branch before writing a line.'
+            : 'Every choice is a branch waiting to happen.'}
+        </h2>
         <p className="inspector-welcome__body">
           {preview
             ? 'Select a design decision, compare its trade-offs, and simulate how another path would grow.'
             : 'Select a design decision in the tree. Compare its trade-offs, choose a different path, and hand the change to a coding agent.'}
         </p>
         <ol className="how-it-works">
-          <li><span>1</span>Pick a decision</li>
-          <li><span>2</span>Choose an alternative</li>
-          <li><span>3</span>{preview ? 'Preview the resulting fork' : 'Grow a working fork'}</li>
+          <li>
+            <span>1</span>Pick a decision
+          </li>
+          <li>
+            <span>2</span>Choose an alternative
+          </li>
+          <li>
+            <span>3</span>
+            {preview ? 'Preview the resulting fork' : 'Grow a working fork'}
+          </li>
         </ol>
       </aside>
     )
@@ -121,7 +134,9 @@ export function Inspector({
   if (generating) ctaLabel = runner.mode === 'preview' ? 'Starting preview…' : 'Starting agent…'
   else if (matchingForkActive) ctaLabel = 'This fork is already running'
   else if (!runner.available) ctaLabel = 'Runner unavailable'
-  else if (!versionForkable) ctaLabel = version.status === 'failed' ? 'Failed version cannot fork' : 'Version still generating'
+  else if (!versionForkable)
+    ctaLabel =
+      version.status === 'failed' ? 'Failed version cannot fork' : 'Version still generating'
   else if (sameChoice) ctaLabel = 'Choose a different path'
 
   let ctaDetail = 'Select an available alternative'
@@ -144,7 +159,12 @@ export function Inspector({
           <Icon name="branch" size={14} />
           From {version.name}
         </span>
-        <button className="icon-button" onClick={onClose} type="button" aria-label="Close inspector">
+        <button
+          className="icon-button"
+          onClick={onClose}
+          type="button"
+          aria-label="Close inspector"
+        >
           <Icon name="close" size={18} />
         </button>
       </div>
@@ -156,7 +176,9 @@ export function Inspector({
 
       <div className="inspector__intro">
         <p className="section-kicker">Design decision</p>
-        <h2 id="inspector-title" ref={heading} tabIndex={-1}>{decision.title}</h2>
+        <h2 id="inspector-title" ref={heading} tabIndex={-1}>
+          {decision.title}
+        </h2>
         <p className="inspector__question">{decision.question}</p>
         <div className="rationale">
           <span>Why it matters</span>
@@ -181,16 +203,21 @@ export function Inspector({
                 type="radio"
                 value={item.id}
               />
-              <span className="alternative__radio" aria-hidden="true"><span /></span>
+              <span className="alternative__radio" aria-hidden="true">
+                <span />
+              </span>
               <span className="alternative__content">
                 <span className="alternative__heading">
                   <strong>{item.label}</strong>
-                  <span className={`signal signal--${item.signal}`}>{signalLabel[item.signal]}</span>
+                  <span className={`signal signal--${item.signal}`}>
+                    {signalLabel[item.signal]}
+                  </span>
                   {current ? <span className="current-badge">Current</span> : null}
                 </span>
                 <span className="alternative__description">{item.description}</span>
                 <span className="alternative__impact">
-                  <span>Impact</span>{item.impact}
+                  <span>Impact</span>
+                  {item.impact}
                 </span>
               </span>
             </label>
@@ -201,16 +228,14 @@ export function Inspector({
       <div className="inspector__action">
         {alternative && !sameChoice ? (
           <div className="agent-brief">
-            <span><Icon name="spark" size={14} /> {runner.mode === 'preview' ? 'Preview brief' : 'Agent brief'}</span>
+            <span>
+              <Icon name="spark" size={14} />{' '}
+              {runner.mode === 'preview' ? 'Preview brief' : 'Agent brief'}
+            </span>
             <p>{alternative.agentBrief}</p>
           </div>
         ) : null}
-        <button
-          className="generate-button"
-          disabled={disabled}
-          onClick={onGenerate}
-          type="button"
-        >
+        <button className="generate-button" disabled={disabled} onClick={onGenerate} type="button">
           <span className="generate-button__icon">
             {generating ? <span className="spinner" /> : <Icon name="branch" size={18} />}
           </span>

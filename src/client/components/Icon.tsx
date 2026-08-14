@@ -36,7 +36,9 @@ const paths: Record<IconName, React.ReactNode> = {
   code: <path d="m8 9-3 3 3 3m8-6 3 3-3 3m-3-9-2 12" />,
   expand: <path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5" />,
   refresh: <path d="M20 11a8 8 0 0 0-14.9-3M4 4v5h5m-5 4a8 8 0 0 0 14.9 3M20 20v-5h-5" />,
-  spark: <path d="m12 2 1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2Zm6 13 .7 2.3L21 18l-2.3.7L18 21l-.7-2.3L15 18l2.3-.7L18 15Z" />,
+  spark: (
+    <path d="m12 2 1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2Zm6 13 .7 2.3L21 18l-2.3.7L18 21l-.7-2.3L15 18l2.3-.7L18 15Z" />
+  ),
   tree: <path d="M12 3v18M12 7 7 11m5 1 5-4M12 16l-4-3m4 5 4-3M7 21h10" />,
   warning: <path d="M12 3 2.8 20h18.4L12 3Zm0 6v5m0 3h.01" />,
 }

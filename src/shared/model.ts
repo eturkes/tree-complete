@@ -2,13 +2,7 @@ export type RunnerMode = 'preview' | 'codex'
 
 export type VersionStatus = 'ready' | 'queued' | 'working' | 'complete' | 'failed'
 
-export type RunPhase =
-  | 'queued'
-  | 'preparing'
-  | 'generating'
-  | 'verifying'
-  | 'complete'
-  | 'failed'
+export type RunPhase = 'queued' | 'preparing' | 'generating' | 'verifying' | 'complete' | 'failed'
 
 export type AlternativeSignal = 'recommended' | 'balanced' | 'experimental'
 

@@ -84,6 +84,25 @@ const darkTheme = {
   },
 } as const
 
+const emptyWorkspace = {
+  project: {
+    id: 'fixture',
+    name: 'Fixture',
+    description: 'Protocol fixture',
+    repository: 'git:fixture',
+    defaultBranch: 'main',
+  },
+  runner: {
+    mode: 'preview',
+    label: 'Preview',
+    available: true,
+    detail: 'Protocol fixture',
+  },
+  versions: [],
+  runs: [],
+  updatedAt: '2026-08-14T00:00:00.000Z',
+} as const
+
 describe('in-progress plugin transport', () => {
   it('verifies the handshake and carries typed request/response messages', async () => {
     const host = fakeWindow()
@@ -97,7 +116,7 @@ describe('in-progress plugin transport', () => {
         context: {
           apiVersion: '1.0',
           capabilities: ['tree-complete.workspace', 'tree-complete.createFork'],
-          project: { id: 'fixture', name: 'Fixture' },
+          project: { id: 'fixture', name: 'Fixture', color: '#67d5b5', available: true },
           theme: darkTheme,
         },
       },
@@ -120,11 +139,11 @@ describe('in-progress plugin transport', () => {
     expect(host.theme.properties.get('--ink')).toBe('#e7ecf4')
     expect(host.theme.properties.get('--ui-font')).toBe('Atkinson Hyperlegible Next')
 
-    const workspace = client.call<{ project: string }>('tree-complete.workspace')
+    const workspace = client.call('tree-complete.workspace')
     const request = port.messages.at(-1) as { id: string; method: string }
     expect(request.method).toBe('tree-complete.workspace')
-    port.respond({ kind: 'response', id: request.id, ok: true, result: { project: 'fixture' } })
-    await expect(workspace).resolves.toEqual({ project: 'fixture' })
+    port.respond({ kind: 'response', id: request.id, ok: true, result: emptyWorkspace })
+    await expect(workspace).resolves.toEqual(emptyWorkspace)
   })
 
   it('rejects incompatible hosts and undeclared capabilities', async () => {
@@ -140,7 +159,7 @@ describe('in-progress plugin transport', () => {
       },
       ports: [port as unknown as MessagePort],
     } as unknown as MessageEvent)
-    await expect(rejected).rejects.toThrow('Unsupported in-progress host API: 2.0')
+    await expect(rejected).rejects.toThrow('Unsupported or invalid in-progress host API')
     expect(port.closed).toBe(true)
 
     const compatible = fakeWindow()
@@ -153,17 +172,17 @@ describe('in-progress plugin transport', () => {
         nonce: 'nonce-3',
         context: {
           apiVersion: '1.0',
-          capabilities: [],
-          project: { id: 'fixture' },
+          capabilities: ['tree-complete.workspace'],
+          project: { id: 'fixture', name: 'Fixture', color: '#67d5b5', available: true },
           theme: darkTheme,
         },
       },
       ports: [compatiblePort as unknown as MessagePort],
     } as unknown as MessageEvent)
-    const client = await connection
-    await expect(client.call('tree-complete.workspace')).rejects.toThrow(
-      'Capability not granted: tree-complete.workspace',
+    await expect(connection).rejects.toThrow(
+      'Required capability not granted: tree-complete.createFork',
     )
+    expect(compatiblePort.closed).toBe(true)
   })
 
   it('rejects an API 1.0 handshake without the required host theme', async () => {
@@ -177,14 +196,14 @@ describe('in-progress plugin transport', () => {
         nonce: 'nonce-without-theme',
         context: {
           apiVersion: '1.0',
-          capabilities: ['tree-complete.workspace'],
-          project: { id: 'fixture', name: 'Fixture' },
+          capabilities: ['tree-complete.workspace', 'tree-complete.createFork'],
+          project: { id: 'fixture', name: 'Fixture', color: '#67d5b5', available: true },
         },
       },
       ports: [port as unknown as MessagePort],
     } as unknown as MessageEvent)
 
-    await expect(rejected).rejects.toThrow('Unsupported in-progress host API: 1.0')
+    await expect(rejected).rejects.toThrow('Unsupported or invalid in-progress host API')
     expect(port.closed).toBe(true)
     expect(host.theme.dataset.inProgressTheme).toBeUndefined()
   })

@@ -5,7 +5,7 @@ import { spawnCaptured } from './process.js'
 
 describe('captured process lifecycle', () => {
   it.skipIf(process.platform === 'win32')(
-    'kills a successful leader\'s same-group descendant even when it ignores SIGTERM',
+    "kills a successful leader's same-group descendant even when it ignores SIGTERM",
     async () => {
       const descendantSource = [
         "process.on('SIGTERM', () => undefined)",
@@ -29,17 +29,19 @@ describe('captured process lifecycle', () => {
         expect(Number.isSafeInteger(descendantPid) && descendantPid > 1).toBe(true)
         await expect(waitForExit(descendantPid)).resolves.toBeUndefined()
       } finally {
-        if (descendantPid) {
-          try {
-            process.kill(descendantPid, 'SIGKILL')
-          } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
-          }
-        }
+        if (descendantPid) forceKill(descendantPid)
       }
     },
   )
 })
+
+function forceKill(pid: number): void {
+  try {
+    process.kill(pid, 'SIGKILL')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
+  }
+}
 
 async function waitForExit(pid: number): Promise<void> {
   const deadline = Date.now() + 2_000

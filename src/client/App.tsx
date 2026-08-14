@@ -18,11 +18,7 @@ import { Icon } from './components/Icon'
 import { Inspector } from './components/Inspector'
 import type { PanelFeedbackValue } from './components/PanelFeedback'
 import { RunDock } from './components/RunDock'
-import {
-  VersionNode,
-  type VersionFlowNode,
-  type VersionNodeData,
-} from './components/VersionNode'
+import { VersionNode, type VersionFlowNode, type VersionNodeData } from './components/VersionNode'
 import { layoutVersionTree, lineageEdges, lineagePathVersionIds } from './layout'
 import { useWorkspace } from './useWorkspace'
 
@@ -97,14 +93,22 @@ function Header({
   return (
     <header className="app-header">
       <a className="brand" href="#main" aria-label="Tree Complete home">
-        <span className="brand__mark"><Icon name="tree" size={22} /></span>
-        <span><strong>tree</strong><em>complete</em></span>
+        <span className="brand__mark">
+          <Icon name="tree" size={22} />
+        </span>
+        <span>
+          <strong>tree</strong>
+          <em>complete</em>
+        </span>
       </a>
       <div className="project-heading">
         <span className="project-heading__eyebrow">Program map</span>
         <h1>{projectName}</h1>
         <span className="project-heading__repo">
-          <Icon name="code" size={13} />{repository}<span>/</span>{defaultBranch}
+          <Icon name="code" size={13} />
+          {repository}
+          <span>/</span>
+          {defaultBranch}
         </span>
       </div>
       <div className="header-actions">
@@ -117,7 +121,10 @@ function Header({
           <span className="runner-pill__status" aria-hidden="true">
             <Icon name={runnerAvailable ? 'check' : 'warning'} size={11} />
           </span>
-          <span><small>Runner</small><strong>{runnerMode}</strong></span>
+          <span>
+            <small>Runner</small>
+            <strong>{runnerMode}</strong>
+          </span>
         </div>
         <button
           aria-label={`Open activity. ${activeRuns ? `${activeRuns} active` : 'No active runs'}. Workspace updated ${relativeUpdate}; ${absoluteUpdate}.`}
@@ -128,11 +135,23 @@ function Header({
         >
           <Icon name="activity" size={16} />
           <span>
-            <strong>{activeRuns ? `${activeRuns} ${runnerMode === 'preview' ? 'preview' : `agent${activeRuns === 1 ? '' : 's'}`} active` : runnerMode === 'preview' ? 'Preview idle' : 'Agents idle'}</strong>
+            <strong>
+              {activeRuns
+                ? `${activeRuns} ${runnerMode === 'preview' ? 'preview' : `agent${activeRuns === 1 ? '' : 's'}`} active`
+                : runnerMode === 'preview'
+                  ? 'Preview idle'
+                  : 'Agents idle'}
+            </strong>
             <small title={absoluteUpdate}>Updated {relativeUpdate}</small>
           </span>
         </button>
-        <button className="refresh-button" disabled={refreshing} onClick={onRefresh} type="button" aria-label="Refresh workspace">
+        <button
+          className="refresh-button"
+          disabled={refreshing}
+          onClick={onRefresh}
+          type="button"
+          aria-label="Refresh workspace"
+        >
           <Icon className={refreshing ? 'is-spinning' : ''} name="refresh" size={17} />
         </button>
       </div>
@@ -144,7 +163,11 @@ function LoadingScreen() {
   return (
     <main className="state-screen" aria-busy="true" aria-label="Loading workspace">
       <div className="loading-tree" aria-hidden="true">
-        <span /><span /><span /><i /><i />
+        <span />
+        <span />
+        <span />
+        <i />
+        <i />
       </div>
       <p className="section-kicker">Reading the program</p>
       <h1>Tracing decisions and branches…</h1>
@@ -155,12 +178,15 @@ function LoadingScreen() {
 function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <main className="state-screen state-screen--error">
-      <span className="state-screen__icon"><Icon name="warning" size={27} /></span>
+      <span className="state-screen__icon">
+        <Icon name="warning" size={27} />
+      </span>
       <p className="section-kicker">Workspace unreachable</p>
       <h1>The tree could not take root.</h1>
       <p>{message}</p>
       <button className="primary-button" onClick={onRetry} type="button">
-        <Icon name="refresh" size={17} />Try again
+        <Icon name="refresh" size={17} />
+        Try again
       </button>
     </main>
   )
@@ -169,7 +195,9 @@ function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => voi
 function EmptyCanvas() {
   return (
     <div className="empty-canvas">
-      <span><Icon name="tree" size={28} /></span>
+      <span>
+        <Icon name="tree" size={28} />
+      </span>
       <h2>No versions yet</h2>
       <p>The workspace is connected, but it has not published a program version.</p>
     </div>
@@ -209,9 +237,8 @@ function LineageCanvas({
         position: positions.get(version.id) ?? { x: 0, y: 0 },
         data: {
           version,
-          runnerMode: runs.find(
-            (run) => run.id === version.runId || run.versionId === version.id,
-          )?.mode,
+          runnerMode: runs.find((run) => run.id === version.runId || run.versionId === version.id)
+            ?.mode,
           selectedDecisionId: selection?.versionId === version.id ? selection.decisionId : null,
           onSelectDecision,
           onOpenRun,
@@ -221,9 +248,21 @@ function LineageCanvas({
         draggable: false,
         selectable: false,
       })),
-    [focusedPath, focusedVersionId, onOpenRun, onSelectDecision, positions, runs, selection, versions],
+    [
+      focusedPath,
+      focusedVersionId,
+      onOpenRun,
+      onSelectDecision,
+      positions,
+      runs,
+      selection,
+      versions,
+    ],
   )
-  const edges = useMemo(() => lineageEdges(versions, focusedVersionId), [focusedVersionId, versions])
+  const edges = useMemo(
+    () => lineageEdges(versions, focusedVersionId),
+    [focusedVersionId, versions],
+  )
   const { fitView, getNode } = useReactFlow<VersionFlowNode>()
   const [compactViewport, setCompactViewport] = useState(
     () => window.matchMedia('(max-width: 820px)').matches,
@@ -253,9 +292,17 @@ function LineageCanvas({
       }
       if (!ready) return
       initialFitMode.current = compactViewport
-      void fitView(mobileRoot
-        ? { nodes: root ? [root] : undefined, padding: 0.04, duration: 450, minZoom: 1, maxZoom: 1 }
-        : { padding: 0.14, duration: 450, maxZoom: 0.92 })
+      void fitView(
+        mobileRoot
+          ? {
+              nodes: root ? [root] : undefined,
+              padding: 0.04,
+              duration: 450,
+              minZoom: 1,
+              maxZoom: 1,
+            }
+          : { padding: 0.14, duration: 450, maxZoom: 0.92 },
+      )
     }
     frame = window.requestAnimationFrame(fitWhenReady)
     return () => window.cancelAnimationFrame(frame)
@@ -337,15 +384,8 @@ function LineageCanvas({
 }
 
 function WorkspaceApp() {
-  const {
-    workspace,
-    loading,
-    initialError,
-    syncError,
-    refreshing,
-    refresh,
-    acceptWorkspace,
-  } = useWorkspace()
+  const { workspace, loading, initialError, syncError, refreshing, refresh, acceptWorkspace } =
+    useWorkspace()
   const [selection, setSelection] = useState<Selection | null>(null)
   const [selectedAlternativeId, setSelectedAlternativeId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -359,7 +399,8 @@ function WorkspaceApp() {
   const panelTrigger = useRef<HTMLElement | null>(null)
   const panelRevision = useRef(0)
 
-  const selectedVersion = workspace?.versions.find((item) => item.id === selection?.versionId) ?? null
+  const selectedVersion =
+    workspace?.versions.find((item) => item.id === selection?.versionId) ?? null
   const selectedDecision =
     selectedVersion?.decisions.find((item) => item.id === selection?.decisionId) ?? null
   const orderedRuns = useMemo(
@@ -373,10 +414,7 @@ function WorkspaceApp() {
 
   const rememberPanelTrigger = useCallback(() => {
     const active = document.activeElement
-    if (
-      active instanceof HTMLElement &&
-      !active.closest('.inspector, .activity-center')
-    ) {
+    if (active instanceof HTMLElement && !active.closest('.inspector, .activity-center')) {
       panelTrigger.current = active
     }
   }, [])
@@ -458,8 +496,7 @@ function WorkspaceApp() {
     (runId?: string) => {
       panelRevision.current += 1
       rememberPanelTrigger()
-      const run =
-        workspace?.runs.find((candidate) => candidate.id === runId) ?? orderedRuns[0]
+      const run = workspace?.runs.find((candidate) => candidate.id === runId) ?? orderedRuns[0]
       setSelection(null)
       setSelectedAlternativeId(null)
       setActivityOpen(true)
@@ -480,10 +517,7 @@ function WorkspaceApp() {
     [focusVersion, workspace?.runs],
   )
 
-  const startFork = async (
-    request: CreateForkRequest,
-    destination: 'decision' | 'activity',
-  ) => {
+  const startFork = async (request: CreateForkRequest, destination: 'decision' | 'activity') => {
     if (generatingRequest.current) return
     const destinationRevision = panelRevision.current
     generatingRequest.current = true
@@ -556,32 +590,35 @@ function WorkspaceApp() {
   }
 
   if (loading && !workspace) return <LoadingScreen />
-  if (initialError && !workspace) return <ErrorScreen message={initialError} onRetry={() => void refresh()} />
+  if (initialError && !workspace)
+    return <ErrorScreen message={initialError} onRetry={() => void refresh()} />
   if (!workspace) return null
 
   const activeRuns = workspace.runs.filter(isRunActive).length
   const matchingForkActive = Boolean(
     selection &&
-      selectedAlternativeId &&
-      workspace.versions.some((version) => {
-        const origin = version.forkOrigin
-        if (
-          version.parentId !== selection.versionId ||
-          origin?.decisionId !== selection.decisionId ||
-          origin.toAlternativeId !== selectedAlternativeId
-        ) {
-          return false
-        }
-        const run = workspace.runs.find(
-          (candidate) => candidate.id === version.runId || candidate.versionId === version.id,
-        )
-        return run ? isRunActive(run) : false
-      }),
+    selectedAlternativeId &&
+    workspace.versions.some((version) => {
+      const origin = version.forkOrigin
+      if (
+        version.parentId !== selection.versionId ||
+        origin?.decisionId !== selection.decisionId ||
+        origin.toAlternativeId !== selectedAlternativeId
+      ) {
+        return false
+      }
+      const run = workspace.runs.find(
+        (candidate) => candidate.id === version.runId || candidate.versionId === version.id,
+      )
+      return run ? isRunActive(run) : false
+    }),
   )
 
   return (
     <div className={`app-shell ${syncError ? 'app-shell--sync-error' : ''}`}>
-      <a className="skip-link" href="#main">Skip to program map</a>
+      <a className="skip-link" href="#main">
+        Skip to program map
+      </a>
       <Header
         activeRuns={activeRuns}
         defaultBranch={workspace.project.defaultBranch}
@@ -600,11 +637,16 @@ function WorkspaceApp() {
         <div className="sync-banner" role="status">
           <Icon name="warning" size={15} />
           Live updates paused: {syncError}
-          <button onClick={() => void refresh()} type="button">Retry</button>
+          <button onClick={() => void refresh()} type="button">
+            Retry
+          </button>
         </div>
       ) : null}
 
-      <main className={`workspace ${selection || activityOpen ? 'workspace--inspecting' : ''}`} id="main">
+      <main
+        className={`workspace ${selection || activityOpen ? 'workspace--inspecting' : ''}`}
+        id="main"
+      >
         <section className="canvas" aria-label="Program version lineage">
           {workspace.versions.length ? (
             <ReactFlowProvider>
@@ -656,16 +698,30 @@ function WorkspaceApp() {
 
       {actionError && !activityOpen && !selection ? (
         <div className="toast toast--error" role="alert">
-          <span><Icon name="warning" size={18} /></span>
-          <div><strong>Action failed</strong><p>{actionError}</p></div>
-          <button aria-label="Dismiss error" onClick={() => setActionError(null)} type="button"><Icon name="close" size={16} /></button>
+          <span>
+            <Icon name="warning" size={18} />
+          </span>
+          <div>
+            <strong>Action failed</strong>
+            <p>{actionError}</p>
+          </div>
+          <button aria-label="Dismiss error" onClick={() => setActionError(null)} type="button">
+            <Icon name="close" size={16} />
+          </button>
         </div>
       ) : null}
       {notice && !activityOpen && !selection ? (
         <div className="toast toast--success" role="status">
-          <span><Icon name="check" size={18} /></span>
-          <div><strong>{notice.title}</strong><p>{notice.detail}</p></div>
-          <button aria-label="Dismiss notification" onClick={() => setNotice(null)} type="button"><Icon name="close" size={16} /></button>
+          <span>
+            <Icon name="check" size={18} />
+          </span>
+          <div>
+            <strong>{notice.title}</strong>
+            <p>{notice.detail}</p>
+          </div>
+          <button aria-label="Dismiss notification" onClick={() => setNotice(null)} type="button">
+            <Icon name="close" size={16} />
+          </button>
         </div>
       ) : null}
     </div>
@@ -676,7 +732,10 @@ async function copyText(value: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     let timeout: number | undefined
     const copied = await Promise.race([
-      navigator.clipboard.writeText(value).then(() => true, () => false),
+      navigator.clipboard.writeText(value).then(
+        () => true,
+        () => false,
+      ),
       new Promise<false>((resolve) => {
         timeout = window.setTimeout(() => resolve(false), 1_200)
       }),

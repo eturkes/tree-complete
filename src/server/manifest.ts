@@ -123,23 +123,13 @@ export function parseProjectManifest(input: unknown): ProjectManifest {
       return {
         id: alternativeId,
         label: text(alternativeRecord.label, `${alternativePath}.label`, 120),
-        description: text(
-          alternativeRecord.description,
-          `${alternativePath}.description`,
-          1_000,
-        ),
+        description: text(alternativeRecord.description, `${alternativePath}.description`, 1_000),
         impact: text(alternativeRecord.impact, `${alternativePath}.impact`, 1_000),
         signal: signal(alternativeRecord.signal, `${alternativePath}.signal`),
         brief: {
           objective: text(briefRecord.objective, `${alternativePath}.brief.objective`, 2_000),
-          constraints: textArray(
-            briefRecord.constraints,
-            `${alternativePath}.brief.constraints`,
-          ),
-          acceptance: textArray(
-            briefRecord.acceptance,
-            `${alternativePath}.brief.acceptance`,
-          ),
+          constraints: textArray(briefRecord.constraints, `${alternativePath}.brief.constraints`),
+          acceptance: textArray(briefRecord.acceptance, `${alternativePath}.brief.acceptance`),
         },
       }
     })
@@ -306,7 +296,9 @@ export function selectManifestAlternative(
   const selected = structuredClone(parseProjectManifest(base))
   const decision = selected.decisions.find((candidate) => candidate.id === decisionId)
   if (!decision) {
-    throw new ProjectManifestError(`Manifest decision ${JSON.stringify(decisionId)} does not exist.`)
+    throw new ProjectManifestError(
+      `Manifest decision ${JSON.stringify(decisionId)} does not exist.`,
+    )
   }
   if (!decision.alternatives.some((candidate) => candidate.id === alternativeId)) {
     throw new ProjectManifestError(
@@ -329,10 +321,7 @@ export async function writeWorktreeManifestSelection(
   const location = await resolveWorktreeManifest(worktree)
   const serialized = `${JSON.stringify(expected, null, 2)}\n`
   assertEncodedSize(serialized)
-  const temporaryPath = join(
-    location.directory,
-    `.project.${process.pid}.${randomUUID()}.tmp`,
-  )
+  const temporaryPath = join(location.directory, `.project.${process.pid}.${randomUUID()}.tmp`)
   let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
     handle = await open(
@@ -426,16 +415,12 @@ function record(value: unknown, path: string, keys: readonly string[]): Record<s
   const result = value as Record<string, unknown>
   const allowed = new Set(keys)
   const extra = Object.keys(result).find((key) => !allowed.has(key))
-  if (extra) throw new ProjectManifestError(`${path} contains unsupported field ${JSON.stringify(extra)}.`)
+  if (extra)
+    throw new ProjectManifestError(`${path} contains unsupported field ${JSON.stringify(extra)}.`)
   return result
 }
 
-function array(
-  value: unknown,
-  path: string,
-  minimum: number,
-  maximum: number,
-): unknown[] {
+function array(value: unknown, path: string, minimum: number, maximum: number): unknown[] {
   if (!Array.isArray(value) || value.length < minimum || value.length > maximum) {
     throw new ProjectManifestError(`${path} must contain ${minimum}-${maximum} items.`)
   }
@@ -443,12 +428,10 @@ function array(
 }
 
 function text(value: unknown, path: string, maximum: number): string {
-  if (
-    typeof value !== 'string' ||
-    value.trim().length < 1 ||
-    value.length > maximum
-  ) {
-    throw new ProjectManifestError(`${path} must be a non-empty string of at most ${maximum} characters.`)
+  if (typeof value !== 'string' || value.trim().length < 1 || value.length > maximum) {
+    throw new ProjectManifestError(
+      `${path} must be a non-empty string of at most ${maximum} characters.`,
+    )
   }
   return value
 }
@@ -462,9 +445,7 @@ function slug(value: unknown, path: string): string {
 
 function signal(value: unknown, path: string): AlternativeSignal {
   if (value !== 'recommended' && value !== 'balanced' && value !== 'experimental') {
-    throw new ProjectManifestError(
-      `${path} must be "recommended", "balanced", or "experimental".`,
-    )
+    throw new ProjectManifestError(`${path} must be "recommended", "balanced", or "experimental".`)
   }
   return value
 }

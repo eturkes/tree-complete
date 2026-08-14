@@ -63,8 +63,10 @@ describe('project manifest validation', () => {
     rootExtra.command = 'arbitrary-command'
     expect(() => parseProjectManifest(rootExtra)).toThrow(/unsupported field "command"/)
 
-    const briefExtra = structuredClone(fixture()).decisions[0].alternatives[0].brief as
-      ProjectManifest['decisions'][number]['alternatives'][number]['brief'] & { model?: string }
+    const briefExtra = structuredClone(fixture()).decisions[0].alternatives[0]
+      .brief as ProjectManifest['decisions'][number]['alternatives'][number]['brief'] & {
+      model?: string
+    }
     briefExtra.model = 'untrusted-model'
     const nestedExtra = structuredClone(fixture())
     nestedExtra.decisions[0].alternatives[0].brief = briefExtra
@@ -134,10 +136,11 @@ describe('project manifest Git and worktree I/O', () => {
     await git(repository, ['reset', '--hard', rawCommit])
     await git(repository, ['replace', rawCommit, replacementCommit])
 
-    expect(parseProjectManifest(await git(repository, [
-      'show',
-      `${rawCommit}:${PROJECT_MANIFEST_PATH}`,
-    ]))).toEqual(replacement)
+    expect(
+      parseProjectManifest(
+        await git(repository, ['show', `${rawCommit}:${PROJECT_MANIFEST_PATH}`]),
+      ),
+    ).toEqual(replacement)
     await expect(readProjectManifestAtCommit(repository, rawCommit)).resolves.toEqual(base)
     await expect(inspectGitRepository(repository)).resolves.toMatchObject({ commit: rawCommit })
   })

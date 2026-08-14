@@ -41,7 +41,8 @@ export class PreviewRunner implements AgentRunner {
           {
             id: 'preview-simulation',
             label: 'Preview simulation',
-            detail: 'Simulated generation and inspection; no repository files or checks were executed.',
+            detail:
+              'Simulated generation and inspection; no repository files or checks were executed.',
             status: 'simulated',
           },
         ],

@@ -205,7 +205,10 @@
   color: var(--ink, #17231f);
   cursor: pointer;
   text-align: left;
-  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .activity-center__run:hover {
@@ -848,12 +851,19 @@
 }
 
 @keyframes activity-center-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes activity-center-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(62, 99, 244, 0.35); }
-  70%, 100% { box-shadow: 0 0 0 7px rgba(62, 99, 244, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(62, 99, 244, 0.35);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px rgba(62, 99, 244, 0);
+  }
 }
 
 @media (min-width: 821px) and (max-width: 1040px) {

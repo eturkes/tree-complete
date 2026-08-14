@@ -52,9 +52,7 @@ export async function inspectGitRepository(path: string): Promise<GitRepositoryM
   return { root, branch, commit, name: basename(root) }
 }
 
-export function isolatedGitEnvironment(
-  additionalNames: readonly string[] = [],
-): NodeJS.ProcessEnv {
+export function isolatedGitEnvironment(additionalNames: readonly string[] = []): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {
     GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_CONFIG_NOSYSTEM: '1',

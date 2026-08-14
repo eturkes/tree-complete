@@ -123,7 +123,8 @@ function assertWorkspaceShape(value: Workspace): boolean {
     if (run.mode !== 'preview' && run.mode !== 'codex') {
       throw new Error('Persisted workspace has an invalid runner mode')
     }
-    const legacyEstimate = (run.result as unknown as { changeKind?: unknown }).changeKind === 'estimated'
+    const legacyEstimate =
+      (run.result as unknown as { changeKind?: unknown }).changeKind === 'estimated'
     try {
       run.result = validateRunnerEvidence(run.result, run.mode)
     } catch (error) {

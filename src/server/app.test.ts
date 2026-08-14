@@ -58,9 +58,9 @@ describe('HTTP API', () => {
     expect(workspace.runner).toMatchObject({ mode: 'preview', available: true })
     expect(workspace.versions).toHaveLength(1)
     expect(workspace.versions[0].decisions).toHaveLength(4)
-    expect(workspace.versions[0].decisions.every((decision) => decision.alternatives.length >= 3)).toBe(
-      true,
-    )
+    expect(
+      workspace.versions[0].decisions.every((decision) => decision.alternatives.length >= 3),
+    ).toBe(true)
   })
 
   it('rejects non-loopback Host and mutation Origin headers', async () => {
@@ -167,9 +167,7 @@ describe('HTTP API', () => {
       },
     })
     apps.push(app)
-    const workspace = (
-      await app.inject({ method: 'GET', url: '/api/workspace' })
-    ).json<Workspace>()
+    const workspace = (await app.inject({ method: 'GET', url: '/api/workspace' })).json<Workspace>()
     expect(workspace.project).toMatchObject({
       id: 'generic-project',
       name: 'generic-project',
@@ -251,11 +249,36 @@ describe('HTTP API', () => {
 
   it.each([
     [{}, 400, 'invalid_request'],
-    [{ baseVersionId: 'missing', decisionId: 'data-boundary', alternativeId: 'sqlite' }, 404, 'base_version_not_found'],
-    [{ baseVersionId: 'root', decisionId: 'missing', alternativeId: 'sqlite' }, 404, 'decision_not_found'],
-    [{ baseVersionId: 'root', decisionId: 'data-boundary', alternativeId: 'missing' }, 404, 'alternative_not_found'],
-    [{ baseVersionId: 'root', decisionId: 'data-boundary', alternativeId: 'local-json' }, 409, 'alternative_already_selected'],
-    [{ baseVersionId: 'root', decisionId: 'data-boundary', alternativeId: 'sqlite', agentBrief: 'untrusted' }, 400, 'invalid_request'],
+    [
+      { baseVersionId: 'missing', decisionId: 'data-boundary', alternativeId: 'sqlite' },
+      404,
+      'base_version_not_found',
+    ],
+    [
+      { baseVersionId: 'root', decisionId: 'missing', alternativeId: 'sqlite' },
+      404,
+      'decision_not_found',
+    ],
+    [
+      { baseVersionId: 'root', decisionId: 'data-boundary', alternativeId: 'missing' },
+      404,
+      'alternative_not_found',
+    ],
+    [
+      { baseVersionId: 'root', decisionId: 'data-boundary', alternativeId: 'local-json' },
+      409,
+      'alternative_already_selected',
+    ],
+    [
+      {
+        baseVersionId: 'root',
+        decisionId: 'data-boundary',
+        alternativeId: 'sqlite',
+        agentBrief: 'untrusted',
+      },
+      400,
+      'invalid_request',
+    ],
   ] as const)('validates a fork request %#', async (payload, statusCode, error) => {
     const app = await testApp()
     const response = await app.inject({ method: 'POST', url: '/api/forks', payload })
@@ -343,8 +366,12 @@ describe('HTTP API', () => {
       config: { agentMode: 'preview', dataDir, previewPhaseDelayMs: 5 },
     })
     apps.push(reopened)
-    const persisted = (await reopened.inject({ method: 'GET', url: '/api/workspace' })).json<Workspace>()
-    expect(persisted.runs.find((run) => run.id === created.runId)?.result).toEqual(completedRun?.result)
+    const persisted = (
+      await reopened.inject({ method: 'GET', url: '/api/workspace' })
+    ).json<Workspace>()
+    expect(persisted.runs.find((run) => run.id === created.runId)?.result).toEqual(
+      completedRun?.result,
+    )
   })
 
   it('fails closed when a runner returns invalid public evidence', async () => {
@@ -361,12 +388,14 @@ describe('HTTP API', () => {
             changedFileCount: -1,
             changedFiles: [],
             changedFilesTruncated: false,
-            checks: [{
-              id: 'preview-simulation',
-              label: 'Preview simulation',
-              detail: 'Fixture.',
-              status: 'simulated',
-            }],
+            checks: [
+              {
+                id: 'preview-simulation',
+                label: 'Preview simulation',
+                detail: 'Fixture.',
+                status: 'simulated',
+              },
+            ],
           },
         }
       },
@@ -468,8 +497,7 @@ function nearLimitWorkspace(): Workspace {
   workspace.runs.pop()
   workspace.runs.pop()
   const targetBytes = TREE_COMPLETE_PUBLIC_RESPONSE_MAX_BYTES - 512
-  const count =
-    1 + Math.floor((targetBytes - initialBytes - firstRunBytes) / additionalRunBytes)
+  const count = 1 + Math.floor((targetBytes - initialBytes - firstRunBytes) / additionalRunBytes)
   workspace.runs.push(...Array.from({ length: count }, (_, index) => historicalRun(index)))
   return workspace
 }
@@ -494,9 +522,7 @@ function historicalRun(index: number): AgentRun {
 }
 
 async function git(repository: string, args: readonly string[]): Promise<string> {
-  return (
-    await execFileChecked('git', ['-C', repository, ...args], { timeoutMs: 15_000 })
-  ).stdout
+  return (await execFileChecked('git', ['-C', repository, ...args], { timeoutMs: 15_000 })).stdout
 }
 
 async function repositoryState(repository: string): Promise<{

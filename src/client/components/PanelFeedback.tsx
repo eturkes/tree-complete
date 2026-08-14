@@ -24,7 +24,10 @@ export function PanelFeedback({
       <span aria-hidden="true">
         <Icon name={value.tone === 'error' ? 'warning' : 'check'} size={17} />
       </span>
-      <div><strong>{value.title}</strong><p>{value.detail}</p></div>
+      <div>
+        <strong>{value.title}</strong>
+        <p>{value.detail}</p>
+      </div>
       <button aria-label="Dismiss notification" onClick={onDismiss} type="button">
         <Icon name="close" size={16} />
       </button>

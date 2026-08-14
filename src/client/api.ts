@@ -1,29 +1,14 @@
-import type {
-  ApiError,
-  CreateForkRequest,
-  CreateForkResponse,
-  Workspace,
-} from '../shared/model'
+import {
+  connectInProgress as connectProtocol,
+  type InProgressClient,
+} from '@in-progress/protocol/client'
+
+import type { ApiError, CreateForkRequest, CreateForkResponse, Workspace } from '../shared/model'
 import { isRunActive } from '../shared/model'
 
 declare const __TREE_COMPLETE_PLUGIN__: boolean
 
-const PLUGIN_API_VERSION = '1.0'
-const PLUGIN_TIMEOUT_MS = 15_000
-
-type PluginMethod = 'tree-complete.workspace' | 'tree-complete.createFork'
-
-interface PluginContext {
-  apiVersion: string
-  capabilities: string[]
-  project: { id: string; name: string }
-  theme: PluginTheme
-}
-
-interface PluginTheme {
-  mode: 'dark' | 'light'
-  tokens: Record<string, string>
-}
+const REQUIRED_CAPABILITIES = ['tree-complete.workspace', 'tree-complete.createFork'] as const
 
 const THEME_PROPERTIES = {
   background: ['--host-background', '--canvas'],
@@ -39,18 +24,6 @@ const THEME_PROPERTIES = {
   monoFont: ['--mono-font'],
 } as const
 
-type PluginResponse =
-  | { kind: 'response'; id: string; ok: true; result: unknown }
-  | { kind: 'response'; id: string; ok: false; error: string }
-
-interface PendingCall {
-  resolve: (value: unknown) => void
-  reject: (reason: Error) => void
-  timer: number
-  signal?: AbortSignal
-  abort?: () => void
-}
-
 export class RequestError extends Error {
   readonly status: number
   readonly detail?: string
@@ -63,144 +36,8 @@ export class RequestError extends Error {
   }
 }
 
-export class InProgressClient {
-  readonly #pending = new Map<string, PendingCall>()
-  readonly #port: MessagePort
-  readonly #target: Window
-  readonly context: PluginContext
-
-  constructor(
-    context: PluginContext,
-    port: MessagePort,
-    target: Window,
-  ) {
-    this.context = context
-    this.#port = port
-    this.#target = target
-    port.addEventListener('message', ({ data }: MessageEvent<PluginResponse>) => {
-      if (!data || data.kind !== 'response' || typeof data.id !== 'string') return
-      const pending = this.#pending.get(data.id)
-      if (!pending) return
-      this.#finish(data.id, pending)
-      if (data.ok) pending.resolve(data.result)
-      else pending.reject(new Error(typeof data.error === 'string' ? data.error : 'Plugin RPC failed'))
-    })
-    port.start()
-  }
-
-  call<T>(method: PluginMethod, params?: unknown, signal?: AbortSignal): Promise<T> {
-    if (!this.context.capabilities.includes(method)) {
-      return Promise.reject(new Error(`Capability not granted: ${method}`))
-    }
-    if (signal?.aborted) return Promise.reject(abortError(signal))
-    const id = crypto.randomUUID()
-    return new Promise<T>((resolve, reject) => {
-      const timer = this.#target.setTimeout(() => {
-        const pending = this.#pending.get(id)
-        if (!pending) return
-        this.#finish(id, pending)
-        reject(new Error(`RPC timed out: ${method}`))
-      }, PLUGIN_TIMEOUT_MS)
-      const pending: PendingCall = {
-        resolve: resolve as (value: unknown) => void,
-        reject,
-        timer,
-      }
-      if (signal) {
-        pending.signal = signal
-        pending.abort = () => {
-          if (!this.#pending.has(id)) return
-          this.#finish(id, pending)
-          reject(abortError(signal))
-        }
-        signal.addEventListener('abort', pending.abort, { once: true })
-      }
-      this.#pending.set(id, pending)
-      this.#port.postMessage({ kind: 'request', id, method, params })
-    })
-  }
-
-  setStatus(status: {
-    state: 'idle' | 'busy' | 'attention' | 'error'
-    badge: string | null
-    title: string | null
-  }): void {
-    this.#port.postMessage({ kind: 'event', name: 'status', payload: status })
-  }
-
-  dispose(): void {
-    for (const [id, pending] of this.#pending) {
-      this.#finish(id, pending)
-      pending.reject(new Error('Plugin connection disposed'))
-    }
-    this.#port.close()
-  }
-
-  #finish(id: string, pending: PendingCall): void {
-    this.#pending.delete(id)
-    this.#target.clearTimeout(pending.timer)
-    if (pending.signal && pending.abort) {
-      pending.signal.removeEventListener('abort', pending.abort)
-    }
-  }
-}
-
-export function connectInProgress(target: Window = window): Promise<InProgressClient> {
-  return new Promise((resolve, reject) => {
-    const timer = target.setTimeout(() => {
-      target.removeEventListener('message', receive)
-      reject(new Error('in-progress host handshake timed out'))
-    }, 10_000)
-
-    function receive(event: MessageEvent): void {
-      if (event.source !== target.parent || event.data?.type !== 'in-progress:init') return
-      const port = event.ports[0]
-      if (!port) return
-      const context = event.data.context as PluginContext | undefined
-      if (
-        !context ||
-        context.apiVersion !== PLUGIN_API_VERSION ||
-        !Array.isArray(context.capabilities) ||
-        !isPluginTheme(context.theme) ||
-        typeof event.data.nonce !== 'string'
-      ) {
-        target.clearTimeout(timer)
-        target.removeEventListener('message', receive)
-        port.close()
-        reject(new Error(`Unsupported in-progress host API: ${context?.apiVersion ?? 'unknown'}`))
-        return
-      }
-      applyPluginTheme(context.theme, target.document.documentElement)
-      target.clearTimeout(timer)
-      target.removeEventListener('message', receive)
-      const client = new InProgressClient(context, port, target)
-      port.postMessage({ kind: 'ready', nonce: event.data.nonce })
-      client.setStatus({ state: 'busy', badge: null, title: 'Loading Tree Complete' })
-      target.addEventListener('pagehide', () => client.dispose(), { once: true })
-      resolve(client)
-    }
-
-    target.addEventListener('message', receive)
-  })
-}
-
-function isPluginTheme(value: unknown): value is PluginTheme {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  const theme = value as Partial<PluginTheme>
-  const tokens = theme.tokens
-  return (
-    (theme.mode === 'dark' || theme.mode === 'light') &&
-    Boolean(tokens) &&
-    typeof tokens === 'object' &&
-    !Array.isArray(tokens) &&
-    Object.values(tokens).every(
-      (token) => typeof token === 'string' && token.length > 0 && token.length <= 200,
-    ) &&
-    Object.keys(THEME_PROPERTIES).every((token) => typeof tokens[token] === 'string')
-  )
-}
-
-function applyPluginTheme(theme: PluginTheme, root: HTMLElement): void {
+function applyTreeTheme(client: InProgressClient, root: HTMLElement): void {
+  const theme = client.context.theme
   root.dataset.inProgressTheme = theme.mode
   root.style.setProperty('color-scheme', theme.mode)
   for (const [token, properties] of Object.entries(THEME_PROPERTIES)) {
@@ -208,6 +45,17 @@ function applyPluginTheme(theme: PluginTheme, root: HTMLElement): void {
     if (!value) continue
     for (const property of properties) root.style.setProperty(property, value)
   }
+}
+
+export async function connectInProgress(target: Window = window): Promise<InProgressClient> {
+  const client = await connectProtocol({
+    target,
+    requiredCapabilities: REQUIRED_CAPABILITIES,
+    applyTheme: false,
+  })
+  applyTreeTheme(client, target.document.documentElement)
+  client.setStatus({ state: 'busy', badge: null, title: 'Loading Tree Complete' })
+  return client
 }
 
 const pluginConnection =
@@ -230,16 +78,14 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       payload = (await response.json()) as ApiError
     } catch {
-      // An upstream proxy may return text or HTML; the status remains useful.
+      // Preserve the HTTP status when an intermediary returned non-JSON.
     }
-
     throw new RequestError(
       payload?.error || `Request failed (${response.status})`,
       response.status,
       payload?.detail,
     )
   }
-
   return (await response.json()) as T
 }
 
@@ -247,7 +93,7 @@ export async function getWorkspace(signal?: AbortSignal): Promise<Workspace> {
   if (!pluginConnection) return await requestJson<Workspace>('/api/workspace', { signal })
   const client = await pluginConnection
   try {
-    const workspace = await client.call<Workspace>('tree-complete.workspace', undefined, signal)
+    const workspace = await client.call('tree-complete.workspace', undefined, { signal })
     publishWorkspaceStatus(client, workspace)
     return workspace
   } catch (error) {
@@ -270,11 +116,7 @@ export async function createFork(
   const client = await pluginConnection
   client.setStatus({ state: 'busy', badge: null, title: 'Creating Tree Complete fork' })
   try {
-    const response = await client.call<CreateForkResponse>(
-      'tree-complete.createFork',
-      request,
-      signal,
-    )
+    const response = await client.call('tree-complete.createFork', request, { signal })
     publishWorkspaceStatus(client, response.workspace)
     return response
   } catch (error) {
@@ -288,12 +130,10 @@ function publishWorkspaceStatus(client: InProgressClient, workspace: Workspace):
   client.setStatus({
     state: active ? 'busy' : 'idle',
     badge: active ? String(Math.min(active, 99)) : null,
-    title: active ? `${active} active Tree Complete run${active === 1 ? '' : 's'}` : 'Tree Complete',
+    title: active
+      ? `${active} active Tree Complete run${active === 1 ? '' : 's'}`
+      : 'Tree Complete',
   })
-}
-
-function abortError(signal: AbortSignal): Error {
-  return signal.reason instanceof Error ? signal.reason : new DOMException('Aborted', 'AbortError')
 }
 
 export function readableError(error: unknown): string {

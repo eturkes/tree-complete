@@ -42,21 +42,42 @@ export function RunDock({ run, version, onOpen }: RunDockProps) {
   const displayedPhase = preview ? previewPhaseLabel[run.phase] : phaseLabel[run.phase]
 
   return (
-    <section className={`run-dock run-dock--${run.phase}`} aria-label={preview ? 'Preview activity' : 'Coding agent activity'}>
+    <section
+      className={`run-dock run-dock--${run.phase}`}
+      aria-label={preview ? 'Preview activity' : 'Coding agent activity'}
+    >
       <div className="run-dock__heading">
-        <span className="run-dock__glyph"><Icon name={active ? 'activity' : run.phase === 'failed' ? 'warning' : 'check'} size={17} /></span>
+        <span className="run-dock__glyph">
+          <Icon
+            name={active ? 'activity' : run.phase === 'failed' ? 'warning' : 'check'}
+            size={17}
+          />
+        </span>
         <span>
-          <span className="run-dock__eyebrow">{preview ? 'Preview activity' : 'Agent activity'} · {run.mode}</span>
+          <span className="run-dock__eyebrow">
+            {preview ? 'Preview activity' : 'Agent activity'} · {run.mode}
+          </span>
           <strong>{displayedPhase}</strong>
         </span>
         <span className="run-dock__percent">{Math.round(run.progress)}%</span>
       </div>
-      <div className="progress-track" aria-label={`${Math.round(run.progress)} percent complete`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(run.progress)}>
+      <div
+        className="progress-track"
+        aria-label={`${Math.round(run.progress)} percent complete`}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(run.progress)}
+      >
         <span style={{ width: `${Math.max(0, Math.min(100, run.progress))}%` }} />
       </div>
       <div className="run-dock__meta">
-        <span>Target <strong>{version?.name ?? run.versionId}</strong></span>
-        <span className={`live-indicator ${active ? 'live-indicator--active' : ''}`}>{active ? 'Live' : 'Latest run'}</span>
+        <span>
+          Target <strong>{version?.name ?? run.versionId}</strong>
+        </span>
+        <span className={`live-indicator ${active ? 'live-indicator--active' : ''}`}>
+          {active ? 'Live' : 'Latest run'}
+        </span>
       </div>
       {run.error ? <p className="run-dock__error">{run.error}</p> : null}
       {logs.length ? (

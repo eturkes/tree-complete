@@ -49,14 +49,7 @@ export class CodexRunner implements AgentRunner {
     await mkdir(worktreeRoot, { recursive: true, mode: 0o700 })
     await safeGit(
       this.options.repository,
-      [
-        'worktree',
-        'add',
-        '-b',
-        context.version.branch,
-        worktree,
-        context.baseVersion.commit,
-      ],
+      ['worktree', 'add', '-b', context.version.branch, worktree, context.baseVersion.commit],
       60_000,
     )
     await context.setWorktree(worktree)
@@ -68,7 +61,9 @@ export class CodexRunner implements AgentRunner {
       throw new Error('Git created an unexpected worktree identity.')
     }
     const baseManifest = await readWorktreeManifest(worktree)
-    if (!isDeepStrictEqual(manifestToDesignDecisions(baseManifest), context.baseVersion.decisions)) {
+    if (
+      !isDeepStrictEqual(manifestToDesignDecisions(baseManifest), context.baseVersion.decisions)
+    ) {
       throw new Error('The pinned manifest does not match the selected version design state.')
     }
     const expectedManifest = await writeWorktreeManifestSelection(
@@ -87,14 +82,7 @@ export class CodexRunner implements AgentRunner {
     try {
       await spawnCaptured(
         this.codexExecutable,
-        [
-          '--yolo',
-          'exec',
-          '--ephemeral',
-          '-C',
-          worktree,
-          '-',
-        ],
+        ['--yolo', 'exec', '--ephemeral', '-C', worktree, '-'],
         {
           cwd: worktree,
           input: focusedPrompt(context),
@@ -157,9 +145,16 @@ export class CodexRunner implements AgentRunner {
       throw new Error('Codex changed the design manifest but produced no implementation changes.')
     }
 
-    const choiceLabel = context.toAlternative.label.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 72)
+    const choiceLabel = context.toAlternative.label
+      .replace(/[\r\n\t]+/g, ' ')
+      .trim()
+      .slice(0, 72)
     const commitMessage = `feat(${safeSlug(context.decision.id)}): choose ${choiceLabel}`
-    await safeGit(worktree, ['commit', '--quiet', '--no-verify', '--message', commitMessage], 60_000)
+    await safeGit(
+      worktree,
+      ['commit', '--quiet', '--no-verify', '--message', commitMessage],
+      60_000,
+    )
     const commit = (
       await safeGit(worktree, ['rev-parse', '--verify', 'HEAD^{commit}'])
     ).stdout.trim()
@@ -213,7 +208,8 @@ export class CodexRunner implements AgentRunner {
           {
             id: 'generated-diff',
             label: 'Generated diff',
-            detail: 'Host required a non-empty implementation diff and passed Git whitespace inspection.',
+            detail:
+              'Host required a non-empty implementation diff and passed Git whitespace inspection.',
             status: 'passed',
           },
           {
@@ -256,11 +252,7 @@ const HOST_GIT_CONFIG = [
   'user.email=tree-complete@localhost',
 ] as const
 
-async function safeGit(
-  worktree: string,
-  args: readonly string[],
-  timeoutMs = 30_000,
-) {
+async function safeGit(worktree: string, args: readonly string[], timeoutMs = 30_000) {
   return await execFileChecked('git', [...HOST_GIT_CONFIG, '-C', worktree, ...args], {
     env: safeGitEnvironment(),
     timeoutMs,
@@ -339,8 +331,8 @@ function safeRepositoryPathLabel(path: string, fingerprintSource: string | Buffe
     label = `[relative repository name] ${label}`
   }
 
-  const sourceWasLossy = Buffer.isBuffer(fingerprintSource) &&
-    !Buffer.from(path, 'utf8').equals(fingerprintSource)
+  const sourceWasLossy =
+    Buffer.isBuffer(fingerprintSource) && !Buffer.from(path, 'utf8').equals(fingerprintSource)
   const changed = label !== path || sourceWasLossy
   const characters = Array.from(label)
   if (!changed && characters.length <= MAX_RUN_RESULT_CHANGED_FILE_LENGTH) return label
@@ -348,9 +340,8 @@ function safeRepositoryPathLabel(path: string, fingerprintSource: string | Buffe
   const fingerprint = createHash('sha256').update(fingerprintSource).digest('hex').slice(0, 8)
   const suffix = ` [${fingerprint}]`
   const available = MAX_RUN_RESULT_CHANGED_FILE_LENGTH - Array.from(suffix).length
-  const bounded = characters.length > available
-    ? `${characters.slice(0, available - 1).join('')}…`
-    : label
+  const bounded =
+    characters.length > available ? `${characters.slice(0, available - 1).join('')}…` : label
   return `${bounded}${suffix}`
 }
 

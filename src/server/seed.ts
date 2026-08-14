@@ -142,7 +142,8 @@ export function seedDecisions(): DesignDecision[] {
         {
           id: 'targeted-checks',
           label: 'Targeted checks',
-          description: 'Ask the agent to run checks relevant to the edited surface, then enforce a clean diff.',
+          description:
+            'Ask the agent to run checks relevant to the edited surface, then enforce a clean diff.',
           impact: 'Good signal-to-runtime balance across unfamiliar repositories.',
           agentBrief:
             'Derive verification from the changed surface and existing project commands. Run focused tests plus static checks, then require a non-empty, whitespace-clean diff before commit.',

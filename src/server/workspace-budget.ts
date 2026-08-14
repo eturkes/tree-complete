@@ -107,8 +107,10 @@ function maximumEvidence(): AgentRunResult {
   return {
     changeKind: 'simulated',
     changedFileCount: Number.MAX_SAFE_INTEGER,
-    changedFiles: Array.from({ length: MAX_RUN_RESULT_CHANGED_FILES }, (_, index) =>
-      `${maximumText(MAX_RUN_RESULT_CHANGED_FILE_LENGTH - 2)}${index.toString(36).padStart(2, '0')}`,
+    changedFiles: Array.from(
+      { length: MAX_RUN_RESULT_CHANGED_FILES },
+      (_, index) =>
+        `${maximumText(MAX_RUN_RESULT_CHANGED_FILE_LENGTH - 2)}${index.toString(36).padStart(2, '0')}`,
     ),
     changedFilesTruncated: false,
     checks: Array.from({ length: MAX_RUN_RESULT_CHECKS }, (_, index) => ({

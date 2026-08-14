@@ -9,7 +9,7 @@ async function files(directory) {
   const found = []
   for (const item of await readdir(directory, { withFileTypes: true })) {
     const path = resolve(directory, item.name)
-    if (item.isDirectory()) found.push(...await files(path))
+    if (item.isDirectory()) found.push(...(await files(path)))
     else if (item.isFile()) found.push(relative(output, path).split(sep).join('/'))
     else throw new Error(`Plugin build contains a non-file asset: ${item.name}`)
   }
@@ -24,7 +24,9 @@ const html = await readFile(resolve(output, entry), 'utf8')
 const markup = html
   .replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, '$1</script>')
   .replace(/(<style\b[^>]*>)[\s\S]*?<\/style>/gi, '$1</style>')
-const references = [...markup.matchAll(/\b(?:href|src)=["']([^"']+)["']/gi)].map((match) => match[1])
+const references = [...markup.matchAll(/\b(?:href|src)=["']([^"']+)["']/gi)].map(
+  (match) => match[1],
+)
 if (assets.length > 0 || references.length > 0) {
   throw new Error(
     `Plugin entry must be self-contained; emitted ${assets.length} external assets and ${references.length} asset references`,
