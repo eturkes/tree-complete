@@ -32,6 +32,10 @@ The production server listens at `http://127.0.0.1:4318` and serves the built cl
 
 The embedded service exposes `workspace()`, `createFork({ baseVersionId, decisionId, alternativeId })`, and `close()`. It calls the typed application service directly. The standalone Fastify server is a separate transport adapter over that service. Both adapters share the store, orchestrator, runner, validation, and public redaction. `preflightProjectManifest()` canonicalizes the target and strictly parses its manifest from the raw committed `HEAD` without opening a workspace store; service startup independently repeats that authoritative inspection. The in-progress host confirms every `tree-complete.createFork` request before calling the service; the plugin client cannot bypass that host boundary. Preview remains the default mode. The embedded client applies the host theme mode, palette, and fonts; target-less standalone keeps Tree Complete’s light visual identity.
 
+The in-progress host accepts only preview mode. It loads this module in a one-shot Bubblewrap worker,
+stores simulation state externally, and mounts every configured repository read-only. Standalone
+Codex mode remains a direct coding-agent workflow and is never plugin authority.
+
 `close()` rejects new calls, drains in-flight service operations, and waits for every orchestrated run. Fastify invokes the same closure from its shutdown hook. Shutdown intentionally does not interrupt a valid Codex run; it can therefore take until Codex exits or reaches its runner timeout (30 minutes by default). Every process settlement kills the detached managed process group, including descendants left after a successful leader exit. Once `close()` resolves, no process remains in that managed group.
 
 ## Create a fork
