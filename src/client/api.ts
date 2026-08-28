@@ -12,8 +12,8 @@ const REQUIRED_CAPABILITIES = ['tree-complete.workspace', 'tree-complete.createF
 
 const THEME_PROPERTIES = {
   background: ['--host-background', '--canvas'],
-  surface: ['--host-surface', '--paper'],
-  surfaceRaised: ['--host-surface-raised', '--paper-warm'],
+  surface: ['--host-surface', '--paper', '--forest'],
+  surfaceRaised: ['--host-surface-raised', '--paper-warm', '--forest-light'],
   border: ['--host-border', '--line', '--line-dark'],
   text: ['--host-text', '--ink'],
   muted: ['--host-muted', '--muted', '--ink-soft'],
@@ -22,6 +22,9 @@ const THEME_PROPERTIES = {
   danger: ['--host-danger', '--coral'],
   uiFont: ['--ui-font'],
   monoFont: ['--mono-font'],
+  radiusSmall: ['--host-radius-small', '--radius-sm'],
+  radiusMedium: ['--host-radius-medium', '--radius-md'],
+  radiusLarge: ['--host-radius-large', '--radius-lg'],
 } as const
 
 export class RequestError extends Error {
@@ -47,6 +50,11 @@ function applyTreeTheme(client: InProgressClient, root: HTMLElement): void {
   }
 }
 
+function prepareTreeFonts(root: HTMLElement): void {
+  root.style.setProperty('--ui-font', "'Atkinson Hyperlegible Next', sans-serif")
+  root.style.setProperty('--mono-font', "'Iosevka', monospace")
+}
+
 export async function connectInProgress(target: Window = window): Promise<InProgressClient> {
   const client = await connectProtocol({
     target,
@@ -58,10 +66,11 @@ export async function connectInProgress(target: Window = window): Promise<InProg
   return client
 }
 
-const pluginConnection =
-  typeof __TREE_COMPLETE_PLUGIN__ !== 'undefined' && __TREE_COMPLETE_PLUGIN__
-    ? connectInProgress()
-    : null
+const pluginConnection = (() => {
+  if (typeof __TREE_COMPLETE_PLUGIN__ === 'undefined' || !__TREE_COMPLETE_PLUGIN__) return null
+  prepareTreeFonts(document.documentElement)
+  return connectInProgress()
+})()
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {

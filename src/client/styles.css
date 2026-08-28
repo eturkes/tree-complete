@@ -1,3 +1,19 @@
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/plugin-theme/atkinson-hyperlegible-next.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Iosevka';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/plugin-theme/iosevka.woff2') format('woff2');
+}
+
 :root {
   color-scheme: light;
   font-family: var(--ui-font), system-ui, sans-serif;
@@ -1969,23 +1985,21 @@ input:focus-visible + .alternative__radio,
   }
 }
 
-:root[data-in-progress-theme='dark'] {
+:root[data-in-progress-theme] {
   --blue-soft: color-mix(in srgb, var(--host-accent) 16%, var(--host-surface));
-  --forest: var(--host-surface-raised);
-  --forest-light: color-mix(in srgb, var(--host-surface-raised) 84%, var(--host-accent));
   --minimap-mask: color-mix(in srgb, var(--host-background) 72%, transparent);
   --minimap-node: var(--host-muted);
 }
 
-:root[data-in-progress-theme='dark'] .app-header,
-:root[data-in-progress-theme='dark'] .inspector__topbar,
-:root[data-in-progress-theme='dark'] .inspector__action {
+:root[data-in-progress-theme] .app-header,
+:root[data-in-progress-theme] .inspector__topbar,
+:root[data-in-progress-theme] .inspector__action {
   border-color: var(--host-border);
   background: color-mix(in srgb, var(--host-surface) 94%, transparent);
   box-shadow: none;
 }
 
-:root[data-in-progress-theme='dark'] .canvas {
+:root[data-in-progress-theme] .canvas {
   background:
     radial-gradient(
       circle at 15% 14%,
@@ -1995,108 +2009,158 @@ input:focus-visible + .alternative__radio,
     var(--host-background);
 }
 
-:root[data-in-progress-theme='dark'] .runner-pill,
-:root[data-in-progress-theme='dark'] .activity-pill,
-:root[data-in-progress-theme='dark'] .refresh-button,
-:root[data-in-progress-theme='dark'] .icon-button,
-:root[data-in-progress-theme='dark'] .version-node,
-:root[data-in-progress-theme='dark'] .version-node__run-button,
-:root[data-in-progress-theme='dark'] .alternative,
-:root[data-in-progress-theme='dark'] .react-flow__controls-button {
+:root[data-in-progress-theme] .runner-pill,
+:root[data-in-progress-theme] .activity-pill,
+:root[data-in-progress-theme] .refresh-button,
+:root[data-in-progress-theme] .icon-button,
+:root[data-in-progress-theme] .version-node,
+:root[data-in-progress-theme] .version-node__run-button,
+:root[data-in-progress-theme] .alternative,
+:root[data-in-progress-theme] .react-flow__controls-button {
   border-color: var(--host-border) !important;
   background: var(--host-surface-raised) !important;
   color: var(--host-text);
 }
 
-:root[data-in-progress-theme='dark'] .activity-pill:hover,
-:root[data-in-progress-theme='dark'] .refresh-button:hover:not(:disabled),
-:root[data-in-progress-theme='dark'] .icon-button:hover,
-:root[data-in-progress-theme='dark'] .version-node__run-button:hover,
-:root[data-in-progress-theme='dark'] .alternative:hover,
-:root[data-in-progress-theme='dark'] .react-flow__controls-button:hover,
-:root[data-in-progress-theme='dark'] .decision-row:hover {
+:root[data-in-progress-theme] .activity-pill:hover,
+:root[data-in-progress-theme] .refresh-button:hover:not(:disabled),
+:root[data-in-progress-theme] .icon-button:hover,
+:root[data-in-progress-theme] .version-node__run-button:hover,
+:root[data-in-progress-theme] .alternative:hover,
+:root[data-in-progress-theme] .react-flow__controls-button:hover,
+:root[data-in-progress-theme] .decision-row:hover {
   background: color-mix(in srgb, var(--host-surface-raised) 82%, var(--host-accent)) !important;
 }
 
-:root[data-in-progress-theme='dark'] .decision-list,
-:root[data-in-progress-theme='dark'] .rationale,
-:root[data-in-progress-theme='dark'] .agent-brief {
+:root[data-in-progress-theme] .decision-list,
+:root[data-in-progress-theme] .rationale,
+:root[data-in-progress-theme] .agent-brief {
   border-color: var(--host-border);
   background: var(--host-surface-raised);
 }
 
-:root[data-in-progress-theme='dark'] .decision-row {
+:root[data-in-progress-theme] .decision-row {
   border-color: var(--host-border);
   color: var(--host-text);
 }
 
-:root[data-in-progress-theme='dark'] .decision-row--selected,
-:root[data-in-progress-theme='dark'] .activity-pill--active {
+:root[data-in-progress-theme] .decision-row--selected,
+:root[data-in-progress-theme] .activity-pill--active {
   background: var(--blue-soft) !important;
 }
 
-:root[data-in-progress-theme='dark'] .empty-canvas,
-:root[data-in-progress-theme='dark'] .lineage-minimap {
+:root[data-in-progress-theme] .empty-canvas,
+:root[data-in-progress-theme] .lineage-minimap {
   border-color: var(--host-border);
   background: color-mix(in srgb, var(--host-surface) 86%, transparent) !important;
 }
 
-:root[data-in-progress-theme='dark'] .inspector,
-:root[data-in-progress-theme='dark'] .run-dock,
-:root[data-in-progress-theme='dark'] .toast {
+:root[data-in-progress-theme] .inspector,
+:root[data-in-progress-theme] .run-dock,
+:root[data-in-progress-theme] .toast {
   border-color: var(--host-border);
   background: color-mix(in srgb, var(--host-surface-raised) 96%, transparent);
   color: var(--host-text);
 }
 
-:root[data-in-progress-theme='dark'] .inspector--decision {
+:root[data-in-progress-theme] .inspector--decision {
   background: var(--host-surface);
   color: var(--host-text);
 }
 
-:root[data-in-progress-theme='dark'] .version-node__header > p,
-:root[data-in-progress-theme='dark'] .inspector__question,
-:root[data-in-progress-theme='dark'] .rationale p,
-:root[data-in-progress-theme='dark'] .alternative__description,
-:root[data-in-progress-theme='dark'] .alternative__impact,
-:root[data-in-progress-theme='dark'] .agent-brief p,
-:root[data-in-progress-theme='dark'] .toast p {
+:root[data-in-progress-theme] .version-node__header > p,
+:root[data-in-progress-theme] .inspector__question,
+:root[data-in-progress-theme] .rationale p,
+:root[data-in-progress-theme] .alternative__description,
+:root[data-in-progress-theme] .alternative__impact,
+:root[data-in-progress-theme] .agent-brief p,
+:root[data-in-progress-theme] .toast p {
   color: var(--host-muted);
 }
 
-:root[data-in-progress-theme='dark'] .brand__mark,
-:root[data-in-progress-theme='dark'] .skip-link,
-:root[data-in-progress-theme='dark'] .empty-canvas > span,
-:root[data-in-progress-theme='dark'] .state-screen__icon,
-:root[data-in-progress-theme='dark'] .primary-button {
+:root[data-in-progress-theme] .brand__mark,
+:root[data-in-progress-theme] .skip-link,
+:root[data-in-progress-theme] .empty-canvas > span,
+:root[data-in-progress-theme] .state-screen__icon,
+:root[data-in-progress-theme] .primary-button {
   background: var(--host-surface-raised);
   color: var(--host-accent);
 }
 
-:root[data-in-progress-theme='dark'] .generate-button {
+:root[data-in-progress-theme] .generate-button {
   background: var(--host-accent);
   box-shadow: none;
   color: var(--host-background);
 }
 
-:root[data-in-progress-theme='dark'] .generate-button:hover:not(:disabled) {
+:root[data-in-progress-theme] .generate-button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--host-accent) 84%, white);
 }
 
-:root[data-in-progress-theme='dark'] .generate-button:disabled {
+:root[data-in-progress-theme] .generate-button:disabled {
   background: var(--host-border);
   color: var(--host-muted);
 }
 
-:root[data-in-progress-theme='dark'] .sync-banner,
-:root[data-in-progress-theme='dark'] .panel-feedback--error {
+:root[data-in-progress-theme] .sync-banner,
+:root[data-in-progress-theme] .panel-feedback--error {
   border-color: color-mix(in srgb, var(--host-danger) 55%, var(--host-border));
   background: color-mix(in srgb, var(--host-danger) 14%, var(--host-surface));
   color: var(--host-danger);
 }
 
-:root[data-in-progress-theme='dark'] .panel-feedback:not(.panel-feedback--error) {
+:root[data-in-progress-theme] .panel-feedback:not(.panel-feedback--error) {
   border-color: color-mix(in srgb, var(--host-accent) 45%, var(--host-border));
   background: color-mix(in srgb, var(--host-accent) 12%, var(--host-surface));
   color: var(--host-text);
+}
+
+:root[data-in-progress-theme] .version-node,
+:root[data-in-progress-theme] .alternative {
+  border-radius: var(--radius-lg);
+  background: var(--host-surface) !important;
+}
+
+:root[data-in-progress-theme] .runner-pill,
+:root[data-in-progress-theme] .activity-pill,
+:root[data-in-progress-theme] .refresh-button,
+:root[data-in-progress-theme] .icon-button,
+:root[data-in-progress-theme] .version-node__run-button,
+:root[data-in-progress-theme] .react-flow__controls {
+  border-radius: var(--radius-md) !important;
+}
+
+:root[data-in-progress-theme] .inspector--welcome {
+  border-color: var(--host-border);
+  background: var(--host-surface);
+  color: var(--host-text);
+}
+
+:root[data-in-progress-theme] .inspector-welcome__body,
+:root[data-in-progress-theme] .how-it-works li {
+  color: var(--host-muted);
+}
+
+:root[data-in-progress-theme] .inspector .section-kicker,
+:root[data-in-progress-theme] .how-it-works span {
+  color: var(--host-accent);
+}
+
+:root[data-in-progress-theme] .how-it-works span {
+  border-color: var(--host-border);
+}
+
+:root[data-in-progress-theme] .inspector-welcome__graphic > span {
+  background: var(--host-accent);
+  box-shadow: 0 0 0 9px color-mix(in srgb, var(--host-accent) 10%, transparent);
+  color: var(--host-background);
+}
+
+:root[data-in-progress-theme] .orbit {
+  border-color: color-mix(in srgb, var(--host-accent) 34%, transparent);
+}
+
+:root[data-in-progress-theme] .orbit::after {
+  border-color: var(--host-surface);
+  background: var(--host-accent);
 }

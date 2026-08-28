@@ -135,7 +135,7 @@ export function lineageEdges(
         labelBgStyle: { fill: '#f8f7ef', fillOpacity: 0.96 },
         labelStyle: {
           fill: '#536059',
-          fontFamily: 'Geist Mono Variable, monospace',
+          fontFamily: 'var(--mono-font), monospace',
           fontSize: 10,
           fontWeight: 620,
           opacity: muted ? 0.42 : 1,

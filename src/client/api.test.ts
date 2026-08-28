@@ -81,6 +81,9 @@ const darkTheme = {
     danger: '#ff6b78',
     uiFont: 'Atkinson Hyperlegible Next',
     monoFont: 'Iosevka',
+    radiusSmall: '6px',
+    radiusMedium: '10px',
+    radiusLarge: '14px',
   },
 } as const
 
@@ -135,9 +138,11 @@ describe('in-progress plugin transport', () => {
     expect(host.theme.properties.get('color-scheme')).toBe('dark')
     expect(host.theme.properties.get('--canvas')).toBe('#0b0e14')
     expect(host.theme.properties.get('--paper')).toBe('#121722')
+    expect(host.theme.properties.get('--forest')).toBe('#121722')
     expect(host.theme.properties.get('--host-surface-raised')).toBe('#18202c')
     expect(host.theme.properties.get('--ink')).toBe('#e7ecf4')
     expect(host.theme.properties.get('--ui-font')).toBe('Atkinson Hyperlegible Next')
+    expect(host.theme.properties.get('--radius-lg')).toBe('14px')
 
     const workspace = client.call('tree-complete.workspace')
     const request = port.messages.at(-1) as { id: string; method: string }
